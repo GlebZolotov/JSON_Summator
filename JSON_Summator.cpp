@@ -1,11 +1,13 @@
+#include "logging.hpp"
 #include "boundedbuffer.hpp"
+#include "worker_thread.hpp"
 #include <stdexcept>
 #include <iostream>
 #include <csignal>
 #include <boost/program_options.hpp>
 #include <cppkafka/consumer.h>
 #include <cppkafka/configuration.h>
-
+#include <boost/thread.hpp>
 
 using std::string;
 using std::exception;
@@ -19,12 +21,12 @@ using cppkafka::TopicPartitionList;
 
 namespace po = boost::program_options;
 
-
 bool running = true;
 
 int main(int argc, char* argv[]) {
     string brokers;
-    string topic_name;
+    string input_topic_name;
+    string output_topic_name;
     string group_id;
     int N;
     int size_of_buffer;
@@ -34,8 +36,10 @@ int main(int argc, char* argv[]) {
         ("help,h",     			"produce this help message")
         ("brokers,b",  			po::value<string>(&brokers)->required(),
                        	   	   	"the kafka broker list")
-        ("topic,t",    			po::value<string>(&topic_name)->required(),
-                       	   	   	"the topic in which to write to")
+        ("input_topic,i",    	po::value<string>(&input_topic_name)->required(),
+                       	   	   	"the topic for reading messages")
+		("output_topic,o",    	po::value<string>(&output_topic_name)->required(),
+								"the topic for writing messages")
         ("group-id,g", 			po::value<string>(&group_id)->required(),
                        	   	    "the consumer group id")
 	    ("number_of_workers,n", po::value<int>(&N)->required(),
@@ -57,41 +61,40 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 
-	bounded_buffer< std::vector<uint8_t> > ring_buffer(size_of_buffer);
-
-	// Create threads
-
-
 	// Stop processing on SIGINT
 	signal(SIGINT, [](int) { running = false; });
 
 	// Construct the configuration
-	Configuration config = {
+	Configuration config_cons = {
 		{ "metadata.broker.list", brokers },
 		{ "group.id", group_id },
 		// Disable auto commit
 		{ "enable.auto.commit", false }
 	};
 
+	Configuration config_prod = {
+			{ "metadata.broker.list", brokers }
+		};
+
 	// Create the consumer
-	Consumer consumer(config);
+	Consumer consumer(config_cons);
+	cppkafka::BufferedProducer<string> producer(config_prod);
 
-	// Print the assigned partitions on assignment
-	consumer.set_assignment_callback([](const TopicPartitionList& partitions) {
-		cout << "Got assigned: " << partitions << endl;
-	});
+	bounded_buffer< std::string > ring_buffer(size_of_buffer);
+	bounded_buffer< std::string > manager_buffer(1);
 
-	// Print the revoked partitions on revocation
-	consumer.set_revocation_callback([](const TopicPartitionList& partitions) {
-		cout << "Got revoked: " << partitions << endl;
-	});
+	// Create threads
+	boost::thread_group thrs;
+	for(int i = 0; i < N; i++) {
+		boost::thread *t = new boost::thread(worker_thread, std::ref(running), std::ref(ring_buffer), std::ref(producer), output_topic_name);
+		thrs.add_thread(t);
+	}
+	//BOOST_LOG_SCOPED_THREAD_TAG("ThreadID", boost::this_thread::get_id());
 
 	// Subscribe to the topic
-	consumer.subscribe({ topic_name });
+	consumer.subscribe({ input_topic_name });
 
-	cout << "Consuming messages from topic " << topic_name << endl;
-
-	std::vector <uint8_t> new_msg;
+	std::string new_msg;
 
 	// Now read lines and write them into kafka
 	while (running) {
@@ -104,23 +107,9 @@ int main(int argc, char* argv[]) {
 				ring_buffer.push_front(new_msg);
 				// Now commit the message
 				consumer.commit(msg);
-
+				INFO << "New message from Kafka";
 			}
 		}
 	}
+	thrs.interrupt_all();
 }
-/*
-int main(int argc, char **argv) {
-	ptree doc;
-
-
-
-
-	istringstream obuf(string(output_message.begin(), output_message.end()));
-	read_json(obuf, doc);
-
-	cout << doc.get<std::string>("rqId") << endl;
-	cout << doc.get<std::string>("model") << endl;
-	cout << doc.get<long long int>("result") << endl;
-	return 0;
-}*/

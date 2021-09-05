@@ -9,8 +9,10 @@
 #define WORKER_THREAD_HPP_
 
 #include "worker.hpp"
-#include <cppkafka/cppkafka.hpp>
+#include "logging.hpp"
+#include "boundedbuffer.hpp"
+#include <cppkafka/utils/buffered_producer.h>
 
-void worker_thread();
+void worker_thread(bool & running, bounded_buffer<std::string> & manager_buffer, cppkafka::BufferedProducer<std::string> & producer, std::string output_topic_name);
 
 #endif /* WORKER_THREAD_HPP_ */

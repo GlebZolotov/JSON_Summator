@@ -12,6 +12,12 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
-std::vector<uint8_t> worker(std::vector<uint8_t> & input_message);
+typedef boost::property_tree::ptree true_input_type;
+typedef boost::property_tree::ptree true_output_type;
+
+true_output_type worker(true_input_type & input_tree);
+true_input_type deserialization(std::string & input_message);
+std::string serialization(true_output_type & output_tree);
+bool validation(true_input_type & input_tree);
 
 #endif /* WORKER_HPP_ */
