@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 2.6)
 
 project (JSON_Summator)
 
-set(SOURCE_EXE JSON_Summator.cpp logging.cpp worker_thread.cpp worker.cpp)
+set(SOURCE_EXE JSON_Summator.cpp logging.cpp manager.cpp worker_thread.cpp worker.cpp)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)

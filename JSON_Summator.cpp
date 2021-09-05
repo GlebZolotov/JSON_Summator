@@ -1,6 +1,7 @@
 #include "logging.hpp"
 #include "boundedbuffer.hpp"
 #include "worker_thread.hpp"
+#include "manager.hpp"
 #include <stdexcept>
 #include <iostream>
 #include <csignal>
@@ -81,15 +82,18 @@ int main(int argc, char* argv[]) {
 	cppkafka::BufferedProducer<string> producer(config_prod);
 
 	bounded_buffer< std::string > ring_buffer(size_of_buffer);
-	bounded_buffer< std::string > manager_buffer(1);
+	std::vector< bounded_buffer< std::string > *> manager_buffer;
 
 	// Create threads
 	boost::thread_group thrs;
 	for(int i = 0; i < N; i++) {
-		boost::thread *t = new boost::thread(worker_thread, std::ref(running), std::ref(ring_buffer), std::ref(producer), output_topic_name);
+		// Можно и не 1, а побольше
+		bounded_buffer< std::string > *buf = new bounded_buffer< std::string >(1);
+		manager_buffer.push_back(buf);
+		boost::thread *t = new boost::thread(worker_thread, std::ref(running), std::ref(*buf), std::ref(producer), output_topic_name);
 		thrs.add_thread(t);
 	}
-	//BOOST_LOG_SCOPED_THREAD_TAG("ThreadID", boost::this_thread::get_id());
+	boost::thread manager_t{manager, std::ref(running), std::ref(ring_buffer), std::ref(manager_buffer)};
 
 	// Subscribe to the topic
 	consumer.subscribe({ input_topic_name });
@@ -111,5 +115,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 	}
+	manager_t.interrupt();
 	thrs.interrupt_all();
+	for(int i=0; i<manager_buffer.size(); i++) delete manager_buffer[i];
 }

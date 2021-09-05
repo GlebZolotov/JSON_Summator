@@ -46,12 +46,13 @@ public:
 	 m_not_full.notify_one();
   }
 
+  bool is_not_full() const { return m_unread < m_container.capacity(); }
+
 private:
   bounded_buffer(const bounded_buffer&);              // Disabled copy constructor
   bounded_buffer& operator = (const bounded_buffer&); // Disabled assign operator
 
   bool is_not_empty() const { return m_unread > 0; }
-  bool is_not_full() const { return m_unread < m_container.capacity(); }
 
   size_type m_unread;
   container_type m_container;
