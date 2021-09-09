@@ -9,7 +9,7 @@
 using namespace std;
 using namespace boost::property_tree;
 
-true_input_type deserialization(string & input_message) {
+true_input_type deserialization(const string & input_message) {
 	true_input_type doc;
 	istringstream in_s(input_message);
 	read_json(in_s, doc);

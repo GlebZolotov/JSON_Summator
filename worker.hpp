@@ -16,7 +16,7 @@ typedef boost::property_tree::ptree true_input_type;
 typedef boost::property_tree::ptree true_output_type;
 
 true_output_type worker(true_input_type & input_tree);
-true_input_type deserialization(std::string & input_message);
+true_input_type deserialization(const std::string & input_message);
 std::string serialization(true_output_type & output_tree);
 bool validation(true_input_type & input_tree);
 
