@@ -7,8 +7,8 @@
 
 #include "manager.hpp"
 
-void manager(bool & running, bounded_buffer<std::string> & ring_buffer, std::vector<bounded_buffer<std::string> *> & manager_buffer) {
-	std::string msg;
+void manager(bool & running, bounded_buffer< std::pair<Message, bool>* > & ring_buffer, std::vector<bounded_buffer< std::pair<Message, bool>* > *> & manager_buffer) {
+	std::pair<Message, bool>* msg;
 	while(running) {
 		ring_buffer.pop_back(&msg);
 		// Вот это надо сделать через cond, чтобы не ждать

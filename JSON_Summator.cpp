@@ -81,14 +81,14 @@ int main(int argc, char* argv[]) {
 	Consumer consumer(config_cons);
 	cppkafka::BufferedProducer<string> producer(config_prod);
 
-	bounded_buffer< std::string > ring_buffer(size_of_buffer);
-	std::vector< bounded_buffer< std::string > *> manager_buffer;
+	bounded_buffer< std::pair<Message, bool>* > ring_buffer(size_of_buffer);
+	std::vector< bounded_buffer< std::pair<Message, bool>* > *> manager_buffer;
 
 	// Create threads
 	boost::thread_group thrs;
 	for(int i = 0; i < N; i++) {
 		// Можно и не 1, а побольше
-		bounded_buffer< std::string > *buf = new bounded_buffer< std::string >(1);
+		bounded_buffer< std::pair<Message, bool>* > *buf = new bounded_buffer< std::pair<Message, bool>* >(1);
 		manager_buffer.push_back(buf);
 		boost::thread *t = new boost::thread(worker_thread, std::ref(running), std::ref(*buf), std::ref(producer), output_topic_name);
 		thrs.add_thread(t);
@@ -98,22 +98,45 @@ int main(int argc, char* argv[]) {
 	// Subscribe to the topic
 	consumer.subscribe({ input_topic_name });
 
-	std::string new_msg;
+	std::list< std::pair<Message, bool>* > list_of_messages;
 
 	// Now read lines and write them into kafka
 	while (running) {
 		// Try to consume a message
-		Message msg = consumer.poll();
-		if (msg) {
+		std::pair<Message, bool>* msg = new std::pair<Message, bool>(consumer.poll(), false);
+		if (msg->first and !(msg->first.get_error())) {
 			// If we managed to get a message
-			if (!msg.get_error()) {
-				new_msg = msg.get_payload();
-				ring_buffer.push_front(new_msg);
+				ring_buffer.push_front(msg);
+				list_of_messages.push_back(msg);
 				// Now commit the message
-				consumer.commit(msg);
+				//consumer.commit(msg);
 				INFO << "New message from Kafka";
-			}
 		}
+		else delete msg;
+
+		int end_of_handled(0);
+		std::pair<Message, bool>* prev_msg = nullptr;
+		for (std::list< std::pair<Message, bool>* >::iterator i=list_of_messages.begin(); i!=list_of_messages.end(); i++) {
+			if ((*i)->second) {
+				if (prev_msg) delete prev_msg;
+				prev_msg = *i;
+				end_of_handled++;
+			}
+			else break;
+		}
+		// commit last handled message
+		if (prev_msg) {
+			consumer.commit(prev_msg->first);
+			delete prev_msg;
+		}
+		if (end_of_handled > 0) {
+			std::list< std::pair<Message, bool>* >::iterator i1=list_of_messages.begin();
+			std::list< std::pair<Message, bool>* >::iterator i2=list_of_messages.begin();
+			// clean list
+			std::advance(i2, end_of_handled);
+			list_of_messages.erase(i1, i2);
+		}
+
 	}
 	manager_t.interrupt();
 	thrs.interrupt_all();
