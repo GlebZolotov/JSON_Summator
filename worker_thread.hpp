@@ -16,6 +16,6 @@
 
 using cppkafka::Message;
 
-void worker_thread(bool & running, bounded_buffer< std::pair<Message, bool>* > & manager_buffer, cppkafka::BufferedProducer<std::string> & producer, std::string output_topic_name);
+void worker_thread(bool & running, bounded_buffer< std::pair<Message&, bool>* > & manager_buffer, cppkafka::BufferedProducer<std::string> & producer, std::string output_topic_name);
 
 #endif /* WORKER_THREAD_HPP_ */

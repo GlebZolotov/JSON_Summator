@@ -47,6 +47,7 @@ public:
   }
 
   bool is_not_full() const { return m_unread < m_container.capacity(); }
+  bool is_need_inc() const { return m_unread < m_container.capacity() / 2; }
 
 private:
   bounded_buffer(const bounded_buffer&);              // Disabled copy constructor

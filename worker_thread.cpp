@@ -7,11 +7,11 @@
 
 #include "worker_thread.hpp"
 
-void worker_thread(bool & running, bounded_buffer< std::pair<Message, bool>* > & manager_buffer, cppkafka::BufferedProducer<std::string> & producer, std::string output_topic_name) {
+void worker_thread(bool & running, bounded_buffer< std::pair<Message&, bool>* > & manager_buffer, cppkafka::BufferedProducer<std::string> & producer, std::string output_topic_name) {
 	//BOOST_LOG_SCOPED_THREAD_TAG("ThreadID", boost::this_thread::get_id());
 	cppkafka::ConcreteMessageBuilder<std::string> builder(output_topic_name);
 	while(running) {
-		std::pair<Message, bool>* new_data;
+		std::pair<Message&, bool>* new_data;
 		std::string res_data;
 		// Get message
 		manager_buffer.pop_back(&new_data);

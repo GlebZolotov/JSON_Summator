@@ -15,6 +15,6 @@
 
 using cppkafka::Message;
 
-void manager(bool & running, bounded_buffer< std::pair<Message, bool>* > & ring_buffer, std::vector<bounded_buffer< std::pair<Message, bool>* > *> & manager_buffer);
+void manager(bool & running, bounded_buffer< std::pair<Message&, bool>* > & ring_buffer, std::vector<bounded_buffer< std::pair<Message&, bool>* > *> & manager_buffer);
 
 #endif /* MANAGER_HPP_ */
