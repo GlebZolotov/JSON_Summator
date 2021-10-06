@@ -12,10 +12,13 @@
 #include "logging.hpp"
 #include "boundedbuffer.hpp"
 #include <cppkafka/utils/buffered_producer.h>
-#include <cppkafka/message.h>
 
-using cppkafka::Message;
-
-void worker_thread(bool & running, bounded_buffer< std::pair<Message&, bool>* > & manager_buffer, cppkafka::BufferedProducer<std::string> & producer, std::string output_topic_name);
+void worker_thread( bool & running, 
+                    bounded_buffer< std::pair<true_input_type, bool>* > & manager_buffer, 
+                    cppkafka::BufferedProducer<std::string> & producer, 
+                    std::string output_topic_name, 
+                    std::string & name_of_csv, 
+                    boost::mutex & csv_lock
+                    );
 
 #endif /* WORKER_THREAD_HPP_ */

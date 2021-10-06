@@ -7,21 +7,15 @@
 
 #include "manager.hpp"
 
-void manager(bool & running, bounded_buffer< std::pair<Message&, bool>* > & ring_buffer, std::vector<bounded_buffer< std::pair<Message&, bool>* > *> & manager_buffer) {
-	std::pair<Message&, bool>* msg;
+void manager(bool & running, string & name_of_csv, boost::mutex & csv_lock) {
+	vector<daily_data> actual_data;
 	while(running) {
-		ring_buffer.pop_back(&msg);
-		// Вот это надо сделать через cond, чтобы не ждать
-		bool q = true;
-		while(q) {
-			for(int i=0; i<manager_buffer.size(); i++)
-				if((*manager_buffer[i]).is_not_full()) {
-					(*manager_buffer[i]).push_front(msg);
-					q = false;
-					break;
-				}
-			if(q) boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+		{
+			boost::unique_lock<boost::mutex> locker(csv_lock);
+			if (is_new_file(name_of_csv) || actual_data.size() == 0) parse_file(name_of_csv, actual_data);
 		}
+		
+		boost::this_thread::sleep_for(boost::chrono::milliseconds(5000));
 	}
 }
 

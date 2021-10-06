@@ -1,5 +1,5 @@
 /*
- * boundedbuffer.h
+ * boundedbuffer.hpp
  *
  *  Created on: 2 сент. 2021 г.
  *      Author: gleb

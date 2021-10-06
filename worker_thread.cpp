@@ -7,17 +7,25 @@
 
 #include "worker_thread.hpp"
 
-void worker_thread(bool & running, bounded_buffer< std::pair<Message&, bool>* > & manager_buffer, cppkafka::BufferedProducer<std::string> & producer, std::string output_topic_name) {
-	//BOOST_LOG_SCOPED_THREAD_TAG("ThreadID", boost::this_thread::get_id());
+void worker_thread( bool & running, 
+                    bounded_buffer< std::pair<true_input_type, bool>* > & manager_buffer, 
+                    cppkafka::BufferedProducer<std::string> & producer, 
+                    std::string output_topic_name, 
+                    std::string & name_of_csv, 
+                    boost::mutex & csv_lock) {
+
 	cppkafka::ConcreteMessageBuilder<std::string> builder(output_topic_name);
+	std::string cur_thr_name_csv(name_of_csv);
+	vector<daily_data> actual_data;
+	
 	while(running) {
-		std::pair<Message&, bool>* new_data;
+		std::pair<true_input_type, bool>* new_data;
 		std::string res_data;
 		// Get message
 		manager_buffer.pop_back(&new_data);
 		try{
 			// De-serialization
-			true_input_type new_value = deserialization(new_data->first.get_payload());
+			true_input_type new_value = new_data->first;
 
 			INFO << "New message from buffer";
 

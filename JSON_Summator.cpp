@@ -1,6 +1,7 @@
 #include "logging.hpp"
 #include "boundedbuffer.hpp"
 #include "worker_thread.hpp"
+#include "worker.hpp"
 #include "manager.hpp"
 #include <stdexcept>
 #include <iostream>
@@ -111,6 +112,13 @@ int main(int argc, char* argv[]) {
 			msgs.push_front(consumer.poll_batch(size_of_buffer / 2));
 			int new_size(msgs.front().size());
 			//msgs.insert(msgs.begin(), new_msgs.begin(), new_msgs.end());
+
+			// De-serialization
+			true_input_type new_value = deserialization(new_data->first.get_payload());
+
+			// Validation
+			if(validation(new_value))
+
 			while (new_size > 0) {
 				std::pair<Message&, bool>* msg = new std::pair<Message&, bool>(msgs.front()[new_size - 1], false);
 				new_size--;
@@ -150,7 +158,6 @@ int main(int argc, char* argv[]) {
 			std::advance(i2, end_of_handled);
 			list_of_messages.erase(i1, i2);
 		}
-
 	}
 	manager_t.interrupt();
 	thrs.interrupt_all();

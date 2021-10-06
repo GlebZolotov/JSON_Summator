@@ -11,10 +11,10 @@
 #include "boundedbuffer.hpp"
 #include <boost/chrono.hpp>
 #include <boost/thread/thread.hpp>
-#include <cppkafka/message.h>
+#include <boost/thread/mutex.hpp>
+#include "dailydata.hpp"
+#include "csv_handler.hpp"
 
-using cppkafka::Message;
-
-void manager(bool & running, bounded_buffer< std::pair<Message&, bool>* > & ring_buffer, std::vector<bounded_buffer< std::pair<Message&, bool>* > *> & manager_buffer);
+void manager(bool & running, string & name_of_csv, boost::mutex & csv_lock);
 
 #endif /* MANAGER_HPP_ */
