@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package input_proto;
+
+message Parameters {
+    double max_risk = 1;
+    double min_return = 2;
+    double p_max = 3;
+    uint32 t = 4;
+    double capital = 5;
+    double wmin = 6;
+}
+
+message InputData {
+    string rqId = 1;
+    string model = 2;
+    string market = 3;
+    string currency = 4;
+    repeated string universe = 5;
+    string T_0 = 6;
+    string T_1 = 7;
+    Parameters p = 8;
+    int32 time_limit = 9;
+    int32 iteration_limit = 10;
+    int32 node_limit = 11;
+    double user_obj_limit = 12;
+    string topic = 13;
+}

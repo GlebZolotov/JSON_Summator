@@ -11,14 +11,18 @@
 #include "worker.hpp"
 #include "logging.hpp"
 #include "boundedbuffer.hpp"
+#include "dailydata.hpp"
+#include <vector>
+#include <string>
 #include <cppkafka/utils/buffered_producer.h>
 
 void worker_thread( bool & running, 
-                    bounded_buffer< std::pair<true_input_type, bool>* > & manager_buffer, 
+                    bounded_buffer< std::pair<true_input_type, bool>* > & ring_buffer, 
                     cppkafka::BufferedProducer<std::string> & producer, 
-                    std::string output_topic_name, 
+                    std::vector<std::string> output_topics_name,
                     std::string & name_of_csv, 
-                    boost::mutex & csv_lock
+                    boost::mutex & csv_lock,
+                    std::vector<daily_data> & manager_actual_data
                     );
 
 #endif /* WORKER_THREAD_HPP_ */

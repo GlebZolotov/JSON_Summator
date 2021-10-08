@@ -10,15 +10,23 @@
 void worker_thread( bool & running, 
                     bounded_buffer< std::pair<true_input_type, bool>* > & manager_buffer, 
                     cppkafka::BufferedProducer<std::string> & producer, 
-                    std::string output_topic_name, 
+					std::vector<std::string> output_topics_name,
                     std::string & name_of_csv, 
-                    boost::mutex & csv_lock) {
+                    boost::mutex & csv_lock,
+                    std::vector<daily_data> & manager_actual_data) {
 
-	cppkafka::ConcreteMessageBuilder<std::string> builder(output_topic_name);
+	std::vector< cppkafka::ConcreteMessageBuilder<std::string> > builders;
+	for (std::string cur_name : output_topics_name) builders.emplace_back(cur_name);
+
 	std::string cur_thr_name_csv(name_of_csv);
-	vector<daily_data> actual_data;
+	std::vector<daily_data> cur_actual_data;
 	
 	while(running) {
+		{
+			boost::unique_lock<boost::mutex> locker(csv_lock);
+			if (name_of_csv != cur_thr_name_csv || cur_actual_data.size() == 0) cur_actual_data = manager_actual_data;
+		}
+
 		std::pair<true_input_type, bool>* new_data;
 		std::string res_data;
 		// Get message
@@ -26,26 +34,24 @@ void worker_thread( bool & running,
 		try{
 			// De-serialization
 			true_input_type new_value = new_data->first;
-
 			INFO << "New message from buffer";
 
-			// Validation
-			if(validation(new_value)) {
+			// Work
+			true_output_type res_value = worker(new_value);
 
-				// Work
-				true_output_type res_value = worker(new_value);
+			// Serialization
+			res_data = serialization(res_value);
 
-				// Serialization
-				res_data = serialization(res_value);
-
-				// Send message
-				builder.payload(res_data);
-				producer.produce(builder);
-				INFO<< "Message sent to Kafka";
-			} else {
-				INFO << "Broken message (not valid)";
+			// Send message
+			for (int i = 0; i < (int)output_topics_name.size(); i++) {
+				if (output_topics_name[i] == new_value.get_topic()) {
+					builders[i].payload(res_data);
+					producer.produce(builders[i]);
+					INFO<< "Message sent to Kafka";
+					new_data->second = true;
+					break;
+				}
 			}
-			new_data->second = true;
 		}
 		catch(...){
 			INFO << "Exception was caught";

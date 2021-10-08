@@ -14,6 +14,7 @@
 
 
 using std::string;
+using std::vector;
 using std::exception;
 using std::cout;
 using std::endl;
@@ -30,27 +31,36 @@ bool running = true;
 
 int main(int argc, char* argv[]) {
     string brokers;
-    string input_topic_name;
-    string output_topic_name;
-    string group_id;
+    vector<string> input_topic_names;
+    vector<string> output_topic_names;
+    vector<string> group_ids;
     int N;
     int size_of_buffer;
+	int size_of_batch;
+	int need_messages;
+	string csv_file;
 
     po::options_description options("Options");
     options.add_options()
         ("help,h",     			"produce this help message")
         ("brokers,b",  			po::value<string>(&brokers)->required(),
                        	   	   	"the kafka broker list")
-        ("input_topic,i",    	po::value<string>(&input_topic_name)->required(),
-                       	   	   	"the topic for reading messages")
-		("output_topic,o",    	po::value<string>(&output_topic_name)->required(),
-								"the topic for writing messages")
-        ("group-id,g", 			po::value<string>(&group_id)->required(),
-                       	   	    "the consumer group id")
+        ("input_topics,i",    	po::value< vector<string> >(&input_topic_names)->required(),
+                       	   	   	"the topics for reading messages")
+		("output_topics,o",    	po::value< vector<string> >(&output_topic_names)->required(),
+								"the topics for writing messages")
+        ("group-ids,g", 		po::value< vector<string> >(&group_ids)->required(),
+                       	   	    "the consumer group ids")
 	    ("number_of_workers,n", po::value<int>(&N)->required(),
 							  	"count of workers")
 		("size_of_buffer,s", 	po::value<int>(&size_of_buffer)->required(),
 							  	"size of buffer")
+		("size_of_batch,t", 	po::value<int>(&size_of_batch)->required(),
+							  	"size of batch")
+		("limit_count_before,l", 	po::value<int>(&need_messages)->required(),
+							  	"count of message which need for reading batch")
+		("path_csv,c", 	        po::value<string>(&csv_file)->required(),
+							  	"name with path of csv file")
         ;
 
     po::variables_map vm;
@@ -69,55 +79,76 @@ int main(int argc, char* argv[]) {
 	// Stop processing on SIGINT
 	signal(SIGINT, [](int) { running = false; });
 
-	// Construct the configuration
-	Configuration config_cons = {
-		{ "metadata.broker.list", brokers },
-		{ "group.id", group_id },
-		// Disable auto commit
-		{ "enable.auto.commit", false }
-	};
+	// Create consumers
+	vector<Consumer> consumers;
+	for (int i = 0; i < input_topic_names.size(); i++) {
+		// Construct the configuration
+		Configuration config_cons = {
+			{ "metadata.broker.list", brokers },
+			{ "group.id", group_ids[i] },
+			// Disable auto commit
+			{ "enable.auto.commit", false }
+		};
+		// Create the consumer
+		consumers.emplace_back(config_cons);
+		// Subscribe to the topic
+		consumers[i].subscribe({ input_topic_names[i] });
+	}
 
+	// Create producer
 	Configuration config_prod = {
 			{ "metadata.broker.list", brokers }
 		};
-
-	// Create the consumer
-	Consumer consumer(config_cons);
 	cppkafka::BufferedProducer<string> producer(config_prod);
 
-	bounded_buffer< std::pair<Message&, bool>* > ring_buffer(size_of_buffer);
-	std::vector< bounded_buffer< std::pair<Message&, bool>* > *> manager_buffer;
+	// Create ring buffer
+	bounded_buffer< std::pair<true_input_type, bool>* > ring_buffer(size_of_buffer);
+
+	// Create mutex and vector for csv_file
+	boost::mutex csv_mutex;
+	vector<daily_data> act_data;
+
+	// Create manager thread
+	boost::thread manager_t{manager, std::ref(running), std::ref(csv_file), std::ref(csv_mutex), std::ref(act_data)};
 
 	// Create threads
 	boost::thread_group thrs;
 	for(int i = 0; i < N; i++) {
-		// Можно и не 1, а побольше
-		bounded_buffer< std::pair<Message&, bool>* > *buf = new bounded_buffer< std::pair<Message&, bool>* >(1);
-		manager_buffer.push_back(buf);
 		boost::thread *t = new boost::thread(worker_thread, std::ref(running), std::ref(*buf), std::ref(producer), output_topic_name);
 		thrs.add_thread(t);
 	}
-	boost::thread manager_t{manager, std::ref(running), std::ref(ring_buffer), std::ref(manager_buffer)};
 
-	// Subscribe to the topic
-	consumer.subscribe({ input_topic_name });
-
-	std::list< std::pair<Message&, bool>* > list_of_messages;
-	std::list< std::vector<Message> > msgs;
+	// Create keepers of messages
+	std::list< std::pair< std::pair<true_input_type, bool>, Message& > list_of_messages;
+	std::vector< std::list< std::vector<Message> > > msgs(input_topic_names.size());
+	std::vector< std::list<int> > counts_of_handled_msgs(input_topic_names.size());
 
 	// Now read lines and write them into kafka
 	while (running) {
 		// Try to consume a message
-		if (ring_buffer.is_need_inc()) {
-			msgs.push_front(consumer.poll_batch(size_of_buffer / 2));
-			int new_size(msgs.front().size());
-			//msgs.insert(msgs.begin(), new_msgs.begin(), new_msgs.end());
+		if (ring_buffer.cur_count() < need_messages) {
+			// Get batch
+			msgs[0].push_back(consumers[0].poll_batch(size_of_batch));
+			counts_of_handled_msgs[0].push_back(0)
 
-			// De-serialization
-			true_input_type new_value = deserialization(new_data->first.get_payload());
-
-			// Validation
-			if(validation(new_value))
+			// Loop-Handler getting batch
+			int new_size(msgs[0].back().size());
+			for (int i = 0; i < new_size; i++) {
+				Message & cur_msg = msgs[0].back()[i];
+				// Check message
+				if (!cur_msg || cur_msg.get_error()) {
+					counts_of_handled_msgs[0].back()++;
+					continue;
+				}
+				// De-serialization
+				true_input_type new_value = deserialization(cur_msg.get_payload());
+				if (!validation(new_value)) {
+					counts_of_handled_msgs[0].back()++;
+					continue;
+				}
+				new_value.set_topic(input_topic_names[0]);
+				
+			}
 
 			while (new_size > 0) {
 				std::pair<Message&, bool>* msg = new std::pair<Message&, bool>(msgs.front()[new_size - 1], false);

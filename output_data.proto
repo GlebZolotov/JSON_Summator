@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package output_proto;
+
+message InputData {
+    string rqId = 1;
+    string model = 2;
+    string market = 3;
+    string currency = 4;
+    double total_cost = 5;
+    double obj = 6;
+    double commission = 7;
+    map<string, int> lots_number = 8;
+    map<string, int> quantity = 9;
+    map<string, int>  weights = 10;
+    map<string, int> prices = 11;
+    enum Statuses {
+        OPTIMAL = 0;
+        INFEASIBLE = 1;
+        UNBOUNDED = 2;
+        ITERATION_LIMIT = 3;
+        NODE_LIMIT = 4;
+        TIME_LIMIT = 5;
+        INTERRUPTED = 6;
+        NUMERIC = 7;
+        SUBOPIMAL = 8;
+        USER_OBJ_LIMIT = 9;
+    }
+    Statuses status = 12;
+    int32 iteration_amount = 13;
+    double accuracy = 14;
+}

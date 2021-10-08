@@ -7,8 +7,7 @@
 
 #include "manager.hpp"
 
-void manager(bool & running, string & name_of_csv, boost::mutex & csv_lock) {
-	vector<daily_data> actual_data;
+void manager(bool & running, string & name_of_csv, boost::mutex & csv_lock, vector<daily_data> & actual_data) {
 	while(running) {
 		{
 			boost::unique_lock<boost::mutex> locker(csv_lock);

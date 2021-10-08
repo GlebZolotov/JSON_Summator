@@ -15,6 +15,6 @@
 #include "dailydata.hpp"
 #include "csv_handler.hpp"
 
-void manager(bool & running, string & name_of_csv, boost::mutex & csv_lock);
+void manager(bool & running, string & name_of_csv, boost::mutex & csv_lock, vector<daily_data> & actual_data);
 
 #endif /* MANAGER_HPP_ */
