@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
 	signal(SIGINT, [](int) { running = false; });
 
 	// Create consumers
-	vector<Consumer> consumers;
+	vector<Consumer*> consumers;
 	for (int i = 0; i < input_topic_names.size(); i++) {
 		// Construct the configuration
 		Configuration config_cons = {
@@ -90,9 +90,10 @@ int main(int argc, char* argv[]) {
 			{ "enable.auto.commit", false }
 		};
 		// Create the consumer
-		consumers.emplace_back(config_cons);
+		Consumer *new_cons = new Consumer(config_cons);
+		consumers.push_back(new_cons);
 		// Subscribe to the topic
-		consumers[i].subscribe({ input_topic_names[i] });
+		consumers[i]->subscribe({ input_topic_names[i] });
 	}
 
 	// Create producer
@@ -114,22 +115,29 @@ int main(int argc, char* argv[]) {
 	// Create threads
 	boost::thread_group thrs;
 	for(int i = 0; i < N; i++) {
-		boost::thread *t = new boost::thread(worker_thread, std::ref(running), std::ref(*buf), std::ref(producer), output_topic_name);
+		boost::thread *t = new boost::thread(worker_thread, 
+											 std::ref(running), 
+											 std::ref(ring_buffer), 
+											 std::ref(producer), 
+											 output_topic_names, 
+											 std::ref(csv_file), 
+											 std::ref(csv_mutex), 
+											 std::ref(act_data));
 		thrs.add_thread(t);
 	}
 
 	// Create keepers of messages
-	std::list< std::pair< std::pair<true_input_type, bool>, Message& > list_of_messages;
+	std::vector< std::list< std::pair< std::pair<true_input_type, bool>, Message& > > > list_of_messages(input_topic_names.size());
 	std::vector< std::list< std::vector<Message> > > msgs(input_topic_names.size());
-	std::vector< std::list<int> > counts_of_handled_msgs(input_topic_names.size());
+	std::vector< std::list< int > > counts_of_handled_msgs(input_topic_names.size());
 
 	// Now read lines and write them into kafka
 	while (running) {
 		// Try to consume a message
 		if (ring_buffer.cur_count() < need_messages) {
 			// Get batch
-			msgs[0].push_back(consumers[0].poll_batch(size_of_batch));
-			counts_of_handled_msgs[0].push_back(0)
+			msgs[0].push_back(consumers[0]->poll_batch(size_of_batch));
+			counts_of_handled_msgs[0].push_back(0);
 
 			// Loop-Handler getting batch
 			int new_size(msgs[0].back().size());
@@ -146,51 +154,47 @@ int main(int argc, char* argv[]) {
 					counts_of_handled_msgs[0].back()++;
 					continue;
 				}
-				new_value.set_topic(input_topic_names[0]);
-				
-			}
+				new_value.set_topic_to_output(output_topic_names[0]);
 
-			while (new_size > 0) {
-				std::pair<Message&, bool>* msg = new std::pair<Message&, bool>(msgs.front()[new_size - 1], false);
-				new_size--;
-				if (msg->first and !(msg->first.get_error())) {
-					// If we managed to get a message
-					ring_buffer.push_front(msg);
-					list_of_messages.push_back(msg);
-					INFO << "New message from Kafka";
-				}
-				else msgs.front().erase(msgs.front().begin()+new_size);
+				// Put message into list of messages
+				list_of_messages[0].push_back(std::pair< std::pair<true_input_type, bool>, Message& >(std::pair<true_input_type, bool>(new_value, false), cur_msg));
+				// Put message into ring buffer
+				ring_buffer.push_front(&(list_of_messages[0].back().first));
+
+				INFO << "New message from Kafka put into ring buffer";
 			}
 		}
 
-		int end_of_handled(0);
-		std::pair<Message&, bool>* prev_msg = nullptr;
-		for (std::list< std::pair<Message&, bool>* >::iterator i=list_of_messages.begin(); i!=list_of_messages.end(); i++) {
-			if ((*i)->second) {
-				if (prev_msg) {
-					while (!msgs.empty() && msgs.back().empty()) msgs.pop_back();
-					if (!msgs.empty()) msgs.back().pop_back();
+		// Check handled and sent messages
+		Message *prev_handled = nullptr;
+		int count_to_remove(0);
+		for (const std::pair< std::pair<true_input_type, bool>, Message& > & check_msg : list_of_messages[0]) {
+			if (check_msg.first.second) {
+				while (counts_of_handled_msgs[0].front() == 0) {
+					msgs[0].pop_front();
+					counts_of_handled_msgs[0].pop_front();
 				}
-				prev_msg = *i;
-				end_of_handled++;
+				counts_of_handled_msgs[0].front()--;
+				prev_handled = &(check_msg.second);
+				count_to_remove++;
+			} else if (count_to_remove > 0) {
+				consumers[0]->commit(*prev_handled);
+				break;
 			}
-			else break;
 		}
-		// commit last handled message
-		if (prev_msg) {
-			consumer.commit(prev_msg->first);
-			while (!msgs.empty() && msgs.back().empty()) msgs.pop_back();
-			if (!msgs.empty()) msgs.back().pop_back();
+
+		// Delete elements from list of messages
+		if (count_to_remove > 0) {
+			std::list< std::pair< std::pair<true_input_type, bool>, Message& > >::iterator i1=list_of_messages[0].begin();
+			std::list< std::pair< std::pair<true_input_type, bool>, Message& > >::iterator i2=list_of_messages[0].begin();
+	
+			std::advance(i2, count_to_remove);
+			list_of_messages[0].erase(i1, i2);
 		}
-		if (end_of_handled > 0) {
-			std::list< std::pair<Message&, bool>* >::iterator i1=list_of_messages.begin();
-			std::list< std::pair<Message&, bool>* >::iterator i2=list_of_messages.begin();
-			// clean list
-			std::advance(i2, end_of_handled);
-			list_of_messages.erase(i1, i2);
-		}
+	}
+	for (int i = 0; i < consumers.size(); i++) {
+		delete consumers[i];
 	}
 	manager_t.interrupt();
 	thrs.interrupt_all();
-	for(int i=0; i<manager_buffer.size(); i++) delete manager_buffer[i];
 }

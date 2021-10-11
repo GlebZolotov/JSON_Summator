@@ -15,14 +15,10 @@
 #include <iostream>
 #include <fstream>
 
-using std::vector;
-using std::string;
-using std::ifstream;
-
 namespace fs = std::filesystem;
 
-bool is_new_file(string &name_of_file);
-bool parse_file(string &name_of_file, vector<daily_data> & res);
+bool is_new_file(std::string &name_of_file);
+void parse_file(std::string &name_of_file, std::vector<daily_data> & res);
 
 
 #endif /* CSV_HANDLER_HPP_ */

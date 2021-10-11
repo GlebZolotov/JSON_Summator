@@ -8,9 +8,7 @@
 #ifndef WORKER_HPP_
 #define WORKER_HPP_
 
-#include <boost/archive/basic_archive.hpp>
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/json_parser.hpp>
+#include <google/protobuf/util/json_util.h>
 #include <string>
 #include <vector>
 #include <map>
@@ -18,8 +16,8 @@
 #include "output_data.pb.h"
 
 
-typedef input_proto::input_data true_input_type;
-typedef input_proto::output_data true_output_type;
+typedef input_proto::InputData true_input_type;
+typedef output_proto::OutputData true_output_type;
 
 true_output_type worker(true_input_type & input_tree);
 true_input_type deserialization(const std::string & input_message);

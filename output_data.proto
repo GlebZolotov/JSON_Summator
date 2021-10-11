@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package output_proto;
 
-message InputData {
+message OutputData {
     string rqId = 1;
     string model = 2;
     string market = 3;
@@ -10,10 +10,10 @@ message InputData {
     double total_cost = 5;
     double obj = 6;
     double commission = 7;
-    map<string, int> lots_number = 8;
-    map<string, int> quantity = 9;
-    map<string, int>  weights = 10;
-    map<string, int> prices = 11;
+    map<string, int32> lots_number = 8;
+    map<string, int32> quantity = 9;
+    map<string, int32>  weights = 10;
+    map<string, int32> prices = 11;
     enum Statuses {
         OPTIMAL = 0;
         INFEASIBLE = 1;

@@ -14,7 +14,9 @@
 #include <boost/thread/mutex.hpp>
 #include "dailydata.hpp"
 #include "csv_handler.hpp"
+#include <vector>
+#include <string>
 
-void manager(bool & running, string & name_of_csv, boost::mutex & csv_lock, vector<daily_data> & actual_data);
+void manager(bool & running, std::string & name_of_csv, boost::mutex & csv_lock, std::vector<daily_data> & actual_data);
 
 #endif /* MANAGER_HPP_ */

@@ -44,7 +44,7 @@ void worker_thread( bool & running,
 
 			// Send message
 			for (int i = 0; i < (int)output_topics_name.size(); i++) {
-				if (output_topics_name[i] == new_value.get_topic()) {
+				if (output_topics_name[i] == new_value.topic_to_output()) {
 					builders[i].payload(res_data);
 					producer.produce(builders[i]);
 					INFO<< "Message sent to Kafka";

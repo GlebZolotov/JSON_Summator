@@ -6,48 +6,39 @@
  */
 
 #include "worker.hpp"
-using namespace std;
-using namespace boost::property_tree;
 
-true_input_type deserialization(const string & input_message) {
+true_input_type deserialization(const std::string & input_message) {
 	true_input_type doc;
-	istringstream in_s(input_message);
-	read_json(in_s, doc);
+	google::protobuf::util::JsonParseOptions options;
+    JsonStringToMessage(input_message, &doc, options);
 	return doc;
 }
 
-string serialization(true_output_type & output_tree) {
-	ostringstream out_s;
-	write_json(out_s, output_tree);
-	return out_s.str();
+std::string serialization(true_output_type & output_data) {
+	std::string res;
+	google::protobuf::util::JsonPrintOptions options;
+    options.add_whitespace = true;
+    options.always_print_primitive_fields = true;
+    options.preserve_proto_field_names = true;
+    MessageToJsonString(output_data, &res, options);
+	return res;
 }
 
-bool validation(true_input_type & input_tree) {
-	ptree::const_assoc_iterator models_pts = input_tree.find("models");
-	ptree::const_assoc_iterator data_pts = input_tree.find("data");
-	boost::optional<string> rqid_pts = input_tree.get_optional<string>("rqId");
-	if(input_tree.not_found() == models_pts || input_tree.not_found() == data_pts || !rqid_pts) {
-		return false;
-	}
-	for (ptree::value_type &data : input_tree.get_child("data")) {
-		boost::optional<int> ch_val = input_tree.get_optional<int>("data." + data.first);
-		if(!ch_val) {
-			return false;
-		}
-	}
+bool validation(true_input_type & input_data) {
+	if (input_data.rqid() == std::string()) return false;
+	if (input_data.model() == std::string()) return false;
+	if (input_data.market() == std::string()) return false;
+	if (input_data.universe_size() == 0) return false;
+	if (!input_data.has_p()) return false;
 	return true;
 }
 
-true_output_type worker(true_input_type & input_tree) {
+true_output_type worker(true_input_type & input_data) {
 	true_output_type res;
-	long long int res_sum = 0;
-
-	for (ptree::value_type &data : input_tree.get_child("data"))
-		res_sum += data.second.get_value<int>();
-
-	res.put("rqId", input_tree.get<string>("rqId"));
-	res.put("model", "model3");
-	res.put("result", res_sum);
+	res.set_rqid(input_data.rqid());
+	res.set_model(input_data.model());
+	res.set_market(input_data.market());
+	res.set_currency(input_data.currency());
 
 	return res;
 }
