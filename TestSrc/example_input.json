@@ -1,0 +1,21 @@
+{
+    "rqId": "0000",
+    "model": "First",
+    "market": "Hello",
+    "currency": "Jack",
+    "universe": ["Rosneft", "Sosneft", "Sorneft"],
+    "T_0": "2021-10-12",
+    "T_1": "2021-12-12",
+    "p": {
+        "max_risk": 1.23,
+        "min_return": 0.55,
+        "p_max": 0.95,
+        "t": 60,
+        "capital": 10000.00,
+        "wmin": 0.99
+    },
+    "time_limit": 1800,
+    "iteration_limit": 100000,
+    "node_limit": 10000,
+    "user_obj_limit": 0.99
+}
