@@ -21,8 +21,9 @@ BOOST_LOG_GLOBAL_LOGGER_INIT(my_logger, logger_t)
     logging::add_file_log(
             boost::log::keywords::file_name = SYS_LOGFILE,
             boost::log::keywords::format = (
-                    expr::stream << expr::format_date_time<     boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S")
+                    expr::stream << expr::format_date_time<     boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
                     << " [" << expr::attr<     boost::log::trivial::severity_level >("Severity") << "]: "
+                    << expr::attr<boost::log::attributes::current_thread_id::value_type >("ThreadID") << " "
                     << expr::smessage
             )
     );
@@ -30,8 +31,9 @@ BOOST_LOG_GLOBAL_LOGGER_INIT(my_logger, logger_t)
     logging::add_console_log(
             std::cout,
             boost::log::keywords::format = (
-                    expr::stream << expr::format_date_time<     boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S")
+                    expr::stream << expr::format_date_time<     boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
                     << " [" << expr::attr<     boost::log::trivial::severity_level >("Severity") << "]: "
+                    << expr::attr<boost::log::attributes::current_thread_id::value_type >("ThreadID") << " "
                     << expr::smessage
             )
     );
