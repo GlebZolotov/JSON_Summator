@@ -8,7 +8,7 @@
 #include "worker_thread.hpp"
 
 void worker_thread( bool & running, 
-                    bounded_buffer< std::pair<true_input_type, bool>* > & manager_buffer, 
+                    std::vector< bounded_buffer< std::pair<true_input_type, bool>* >* > & ring_buffers, 
                     cppkafka::BufferedProducer<std::string> & producer, 
 					std::vector<std::string> output_topics_name,
                     std::string & name_of_csv, 
@@ -30,31 +30,34 @@ void worker_thread( bool & running,
 		std::pair<true_input_type, bool>* new_data;
 		std::string res_data;
 		// Get message
-		manager_buffer.pop_back(&new_data);
-		try{
-			// De-serialization
-			true_input_type new_value = new_data->first;
-			INFO << "New message from buffer";
+		for(int index_of_topic = 0; index_of_topic < ring_buffers.size(); index_of_topic++) {
+			if (ring_buffers[index_of_topic]->safe_is_empty()) continue;
+			ring_buffers[index_of_topic]->pop_back(&new_data);
+			try{
+				// De-serialization
+				true_input_type new_value = new_data->first;
+				INFO << "New message from buffer";
 
-			// Work
-			true_output_type res_value = worker(new_value);
+				// Work
+				true_output_type res_value = worker(new_value);
 
-			// Serialization
-			res_data = serialization(res_value);
+				// Serialization
+				res_data = serialization(res_value);
 
-			// Send message
-			for (int i = 0; i < (int)output_topics_name.size(); i++) {
-				if (output_topics_name[i] == new_value.topic_to_output()) {
-					builders[i].payload(res_data);
-					producer.produce(builders[i]);
-					INFO<< "Message sent to Kafka";
-					new_data->second = true;
-					break;
+				// Send message
+				for (int i = 0; i < (int)output_topics_name.size(); i++) {
+					if (output_topics_name[i] == new_value.topic_to_output()) {
+						builders[i].payload(res_data);
+						producer.produce(builders[i]);
+						INFO<< "Message sent to Kafka";
+						new_data->second = true;
+						break;
+					}
 				}
 			}
-		}
-		catch(...){
-			INFO << "Exception was caught";
+			catch(...){
+				INFO << "Exception was caught";
+			}
 		}
 	}
 }

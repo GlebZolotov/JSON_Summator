@@ -103,7 +103,11 @@ int main(int argc, char* argv[]) {
 	cppkafka::BufferedProducer<string> producer(config_prod);
 
 	// Create ring buffer
-	bounded_buffer< std::pair<true_input_type, bool>* > ring_buffer(size_of_buffer);
+	std::vector< bounded_buffer< std::pair<true_input_type, bool>* >* > ring_buffers;
+	for (int i = 0; i < input_topic_names.size(); i++) {
+		bounded_buffer< std::pair<true_input_type, bool>* >* buf = new bounded_buffer< std::pair<true_input_type, bool>* >(size_of_buffer);
+		ring_buffers.push_back(buf);
+	}
 
 	// Create mutex and vector for csv_file
 	boost::mutex csv_mutex;
@@ -117,7 +121,7 @@ int main(int argc, char* argv[]) {
 	for(int i = 0; i < N; i++) {
 		boost::thread *t = new boost::thread(worker_thread, 
 											 std::ref(running), 
-											 std::ref(ring_buffer), 
+											 std::ref(ring_buffers), 
 											 std::ref(producer), 
 											 output_topic_names, 
 											 std::ref(csv_file), 
@@ -129,72 +133,84 @@ int main(int argc, char* argv[]) {
 	// Create keepers of messages
 	std::vector< std::list< std::pair< std::pair<true_input_type, bool>, Message& > > > list_of_messages(input_topic_names.size());
 	std::vector< std::list< std::vector<Message> > > msgs(input_topic_names.size());
-	std::vector< std::list< int > > counts_of_handled_msgs(input_topic_names.size());
+	std::vector< std::list< int > > counts_of_unhandled_msgs(input_topic_names.size());
+
+	int index_of_topic(0);
 
 	// Now read lines and write them into kafka
 	while (running) {
 		// Try to consume a message
-		if (ring_buffer.cur_count() < need_messages) {
+		if (ring_buffers[index_of_topic]->cur_count() < need_messages) {
 			// Get batch
-			msgs[0].push_back(consumers[0]->poll_batch(size_of_batch));
-			counts_of_handled_msgs[0].push_back(0);
+			msgs[index_of_topic].push_back(consumers[index_of_topic]->poll_batch(size_of_batch));
+			// Check empty batch
+			if (msgs[index_of_topic].back().size() == 0) {
+				msgs[index_of_topic].pop_back();
+				index_of_topic++;
+				if (index_of_topic == input_topic_names.size()) index_of_topic = 0;
+			} else {
+				// Loop-Handler getting batch
+				int new_size(msgs[index_of_topic].back().size());
+				counts_of_unhandled_msgs[index_of_topic].push_back(new_size);
+				for (int i = 0; i < new_size; i++) {
+					Message & cur_msg = msgs[index_of_topic].back()[i];
+					// Check message
+					if (!cur_msg || cur_msg.get_error()) {
+						counts_of_unhandled_msgs[index_of_topic].back()--;
+						continue;
+					}
+					// De-serialization
+					true_input_type new_value = deserialization(cur_msg.get_payload());
+					if (!validation(new_value)) {
+						counts_of_unhandled_msgs[index_of_topic].back()--;
+						continue;
+					}
+					new_value.set_topic_to_output(output_topic_names[index_of_topic]);
 
-			// Loop-Handler getting batch
-			int new_size(msgs[0].back().size());
-			for (int i = 0; i < new_size; i++) {
-				Message & cur_msg = msgs[0].back()[i];
-				// Check message
-				if (!cur_msg || cur_msg.get_error()) {
-					counts_of_handled_msgs[0].back()++;
-					continue;
+					// Put message into list of messages
+					list_of_messages[index_of_topic].push_back(std::pair< std::pair<true_input_type, bool>, Message& >(std::pair<true_input_type, bool>(new_value, false), cur_msg));
+					// Put message into ring buffer
+					ring_buffers[index_of_topic]->push_front(&(list_of_messages[index_of_topic].back().first));
+
+					INFO << "New message from Kafka put into ring buffer";
 				}
-				// De-serialization
-				true_input_type new_value = deserialization(cur_msg.get_payload());
-				if (!validation(new_value)) {
-					counts_of_handled_msgs[0].back()++;
-					continue;
-				}
-				new_value.set_topic_to_output(output_topic_names[0]);
-
-				// Put message into list of messages
-				list_of_messages[0].push_back(std::pair< std::pair<true_input_type, bool>, Message& >(std::pair<true_input_type, bool>(new_value, false), cur_msg));
-				// Put message into ring buffer
-				ring_buffer.push_front(&(list_of_messages[0].back().first));
-
-				INFO << "New message from Kafka put into ring buffer";
 			}
 		}
 
 		// Check handled and sent messages
-		Message *prev_handled = nullptr;
-		int count_to_remove(0);
-		for (const std::pair< std::pair<true_input_type, bool>, Message& > & check_msg : list_of_messages[0]) {
-			if (check_msg.first.second) {
-				while (counts_of_handled_msgs[0].front() == 0) {
-					msgs[0].pop_front();
-					counts_of_handled_msgs[0].pop_front();
+		for (int index_of_topic_to_check = 0; index_of_topic_to_check < input_topic_names.size(); index_of_topic_to_check++) {
+			Message *prev_handled = nullptr;
+			int count_to_remove(0);
+			for (const std::pair< std::pair<true_input_type, bool>, Message& > & check_msg : list_of_messages[index_of_topic_to_check]) {
+				if (check_msg.first.second) {
+					while (counts_of_unhandled_msgs[index_of_topic_to_check].front() == 0) {
+						msgs[index_of_topic_to_check].pop_front();
+						counts_of_unhandled_msgs[index_of_topic_to_check].pop_front();
+					}
+					counts_of_unhandled_msgs[index_of_topic_to_check].front()--;
+					prev_handled = &(check_msg.second);
+					count_to_remove++;
+				} else if (count_to_remove > 0) {
+					consumers[index_of_topic_to_check]->commit(*prev_handled);
+					break;
 				}
-				counts_of_handled_msgs[0].front()--;
-				prev_handled = &(check_msg.second);
-				count_to_remove++;
-			} else if (count_to_remove > 0) {
-				consumers[0]->commit(*prev_handled);
-				break;
+			}
+			if (count_to_remove == list_of_messages[index_of_topic_to_check].size() && count_to_remove != 0) consumers[index_of_topic_to_check]->commit(*prev_handled);
+
+			// Delete elements from list of messages
+			if (count_to_remove > 0) {
+				std::list< std::pair< std::pair<true_input_type, bool>, Message& > >::iterator i1=list_of_messages[index_of_topic_to_check].begin();
+				std::list< std::pair< std::pair<true_input_type, bool>, Message& > >::iterator i2=list_of_messages[index_of_topic_to_check].begin();
+		
+				std::advance(i2, count_to_remove);
+				list_of_messages[index_of_topic_to_check].erase(i1, i2);
 			}
 		}
-
-		// Delete elements from list of messages
-		if (count_to_remove > 0) {
-			std::list< std::pair< std::pair<true_input_type, bool>, Message& > >::iterator i1=list_of_messages[0].begin();
-			std::list< std::pair< std::pair<true_input_type, bool>, Message& > >::iterator i2=list_of_messages[0].begin();
-	
-			std::advance(i2, count_to_remove);
-			list_of_messages[0].erase(i1, i2);
-		}
 	}
-	for (int i = 0; i < consumers.size(); i++) {
-		delete consumers[i];
-	}
-	manager_t.interrupt();
+	manager_t.join();
 	thrs.interrupt_all();
+	for (int i = 0; i < input_topic_names.size(); i++) {
+		delete consumers[i];
+		delete ring_buffers[i];
+	}
 }

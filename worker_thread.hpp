@@ -17,7 +17,7 @@
 #include <cppkafka/utils/buffered_producer.h>
 
 void worker_thread( bool & running, 
-                    bounded_buffer< std::pair<true_input_type, bool>* > & ring_buffer, 
+                    std::vector< bounded_buffer< std::pair<true_input_type, bool>* >* > & ring_buffers, 
                     cppkafka::BufferedProducer<std::string> & producer, 
                     std::vector<std::string> output_topics_name,
                     std::string & name_of_csv, 

@@ -46,6 +46,10 @@ class bounded_buffer {
 
         bool is_not_full() const { return m_unread < m_container.capacity(); }
         int cur_count() const { return (int)m_unread; }
+        bool safe_is_empty() {
+            boost::mutex::scoped_lock lock(m_mutex);
+            return m_unread == 0;
+        }
 
     private:
         bounded_buffer(const bounded_buffer&);              // Disabled copy constructor

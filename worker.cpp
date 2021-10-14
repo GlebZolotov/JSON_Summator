@@ -39,6 +39,7 @@ true_output_type worker(true_input_type & input_data) {
 	res.set_model(input_data.model());
 	res.set_market(input_data.market());
 	res.set_currency(input_data.currency());
+	std::this_thread::sleep_for(std::chrono::milliseconds(10000));
 
 	return res;
 }
