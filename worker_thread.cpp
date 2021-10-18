@@ -15,14 +15,17 @@ void worker_thread( bool & running,
                     boost::mutex & csv_lock,
                     std::vector<daily_data> & manager_actual_data) {
 
+	// Create builders for sending messages
 	std::vector< cppkafka::ConcreteMessageBuilder<std::string> > builders;
 	for (std::string cur_name : output_topics_name) builders.emplace_back(cur_name);
 
+	// Create variable for data from csv
 	std::string cur_thr_name_csv(name_of_csv);
 	std::vector<daily_data> cur_actual_data;
 	
 	while(running) {
 		{
+			// Check if have new data from csv
 			boost::unique_lock<boost::mutex> locker(csv_lock);
 			if (name_of_csv != cur_thr_name_csv || cur_actual_data.size() == 0) cur_actual_data = manager_actual_data;
 		}
@@ -34,26 +37,28 @@ void worker_thread( bool & running,
 			if (ring_buffers[index_of_topic]->safe_is_empty()) continue;
 			ring_buffers[index_of_topic]->pop_back(&new_data);
 			try{
-				// De-serialization
-				true_input_type new_value = new_data->first;
+				// Create solver object and run it into another thread
 				INFO << "New message from buffer";
-
-				// Work
-				true_output_type res_value = worker(new_value);
+				MadStatement task;
+				TestSolver solveEngine(construct_input_for_solver(new_data->first, task));
+				boost::thread solve_t(&TestSolver::Solve, &solveEngine);
+				// Check status of solving
+				MadSolution res;
+				do {
+					std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+					res = solveEngine.Current();
+					INFO << "I'm wait...";
+				} while (res.status == SolutionStatus::STARTED);
 
 				// Serialization
-				res_data = serialization(res_value);
+				true_output_type res_out;
+				res_data = serialization(construct_output_from_solver(res_out, new_data->first, res));
 
 				// Send message
-				for (int i = 0; i < (int)output_topics_name.size(); i++) {
-					if (output_topics_name[i] == new_value.topic_to_output()) {
-						builders[i].payload(res_data);
-						producer.produce(builders[i]);
-						INFO<< "Message sent to Kafka";
-						new_data->second = true;
-						break;
-					}
-				}
+				builders[index_of_topic].payload(res_data);
+				producer.produce(builders[index_of_topic]);
+				INFO<< "Message sent to Kafka";
+				new_data->second = true;
 			}
 			catch(...){
 				INFO << "Exception was caught";

@@ -15,16 +15,19 @@ message OutputData {
     map<string, int32>  weights = 10;
     map<string, int32> prices = 11;
     enum Statuses {
-        OPTIMAL = 0;
-        INFEASIBLE = 1;
-        UNBOUNDED = 2;
-        ITERATION_LIMIT = 3;
-        NODE_LIMIT = 4;
-        TIME_LIMIT = 5;
-        INTERRUPTED = 6;
-        NUMERIC = 7;
-        SUBOPIMAL = 8;
-        USER_OBJ_LIMIT = 9;
+        NOT_STARTED = 0;
+        STARTED = 1;
+        OPTIMAL_FOUND = 2;
+        INCORRECT_PROBLEM = 3; 
+        UNBOUNDED_PROBLEM = 4;
+        ITERATION_LIMIT_REACHED = 5;
+        NODE_LIMIT_REACHED = 6;
+        TIME_LIMIT_REACHED = 7;
+        INTERRUPTED = 8;
+        NUMERICAL_ERROR = 9;
+        SUBOPTIMAL_FOUND = 10;
+        USER_OBJ_LIMIT_REACHED = 11;
+        NOT_SUPPORTED = 12;
     }
     Statuses status = 12;
     int32 iteration_amount = 13;

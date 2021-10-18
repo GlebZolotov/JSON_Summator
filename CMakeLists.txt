@@ -2,7 +2,7 @@ cmake_minimum_required (VERSION 2.6)
 set(CMAKE_CXX_STANDARD 17)
 project (JSON_Summator)
 
-set(SOURCE_EXE JSON_Summator.cpp logging.cpp manager.cpp worker_thread.cpp worker.cpp csv_handler.cpp dailydata.cpp)
+set(SOURCE_EXE JSON_Summator.cpp logging.cpp manager.cpp worker_thread.cpp worker.cpp csv_handler.cpp dailydata.cpp library/test_solver.cpp)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)

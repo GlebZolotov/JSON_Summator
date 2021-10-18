@@ -32,9 +32,11 @@ MadSolution & TestSolver::Solve() {
     res.totalCost = mersenne()%10000 / 100.;
     res.iterationAmount = mersenne()%10000;
     res.nodeAmount = mersenne()%10000;
-    for (int i = 0; i < 100; i++) {
-        res.numLots << mersenne()%10000;
-        res.weights << mersenne()%10000 / 100000.;
+    res.numLots.resize(task.meanRate.rows());
+    res.weights.resize(task.meanRate.rows());
+    for (int i = 0; i < task.meanRate.rows(); i++) {
+        res.numLots[i] = mersenne()%10000;
+        res.weights[i] = mersenne()%10000 / 100000.;
     }
     res.objectiveValue = mersenne()%10000 / 100000.;
     res.problemType = static_cast<ProblemType>(mersenne()%4);
