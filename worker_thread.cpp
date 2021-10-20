@@ -7,8 +7,9 @@
 
 #include "worker_thread.hpp"
 
-void worker_thread( bool & running, 
-                    std::vector< bounded_buffer< std::pair<true_input_type, bool>* >* > & ring_buffers, 
+void worker_thread( std::mutex & m_stop,
+                    std::condition_variable & stop_threads, 
+                    std::vector< bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >* > & ring_buffers, 
                     cppkafka::BufferedProducer<std::string> & producer, 
 					std::vector<std::string> output_topics_name,
                     std::string & name_of_csv, 
@@ -23,14 +24,14 @@ void worker_thread( bool & running,
 	std::string cur_thr_name_csv(name_of_csv);
 	std::vector<daily_data> cur_actual_data;
 	
-	while(running) {
+	while (true) {
 		{
 			// Check if have new data from csv
 			boost::unique_lock<boost::mutex> locker(csv_lock);
 			if (name_of_csv != cur_thr_name_csv || cur_actual_data.size() == 0) cur_actual_data = manager_actual_data;
 		}
 
-		std::pair<true_input_type, bool>* new_data;
+		std::pair<true_input_type, std::atomic<bool> & >* new_data;
 		std::string res_data;
 		// Get message
 		for(int index_of_topic = 0; index_of_topic < ring_buffers.size(); index_of_topic++) {
@@ -50,20 +51,19 @@ void worker_thread( bool & running,
 					INFO << "I'm wait...";
 				} while (res.status == SolutionStatus::STARTED);
 
-				// Serialization
+				// Serialization & Send message
 				true_output_type res_out;
-				res_data = serialization(construct_output_from_solver(res_out, new_data->first, res));
-
-				// Send message
-				builders[index_of_topic].payload(res_data);
+				builders[index_of_topic].payload(serialization(construct_output_from_solver(res_out, new_data->first, res)));
 				producer.produce(builders[index_of_topic]);
 				INFO<< "Message sent to Kafka";
-				new_data->second = true;
+				new_data->second.store(true);
 			}
 			catch(...){
 				INFO << "Exception was caught";
 			}
 		}
+		//std::unique_lock<std::mutex> l(m_stop);
+        //if (stop_threads.wait_for(l, std::chrono::milliseconds(10)) == std::cv_status::no_timeout) break;
 	}
 }
 

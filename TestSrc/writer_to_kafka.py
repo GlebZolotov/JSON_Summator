@@ -14,4 +14,5 @@ with topic.get_sync_producer() as producer:
     for i in range(int(sys.argv[3])):
         data["rqId"] = str(sys.argv[2]) + "_" + str(i)
         producer.produce(dumps(data).encode('utf-8'))
+        print("Send " + data["rqId"])
         sleep(fabs(normal(1, 1)))

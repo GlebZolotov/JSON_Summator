@@ -27,7 +27,13 @@ using namespace std::chrono_literals;
 
 namespace po = boost::program_options;
 
-bool running = true;
+std::atomic<int> stop_main = 0;
+std::condition_variable stop_threads;
+std::mutex m_stop;
+
+void signalHandler(int signum) {
+    stop_main.store(1);
+}
 
 int main(int argc, char* argv[]) {
     string brokers;
@@ -77,7 +83,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Stop processing on SIGINT
-	signal(SIGINT, [](int) { running = false; });
+	//signal(SIGINT, signalHandler);
 
 	// Create consumers
 	vector<Consumer*> consumers;
@@ -103,9 +109,9 @@ int main(int argc, char* argv[]) {
 	cppkafka::BufferedProducer<string> producer(config_prod);
 
 	// Create ring buffer
-	std::vector< bounded_buffer< std::pair<true_input_type, bool>* >* > ring_buffers;
+	std::vector< bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >* > ring_buffers;
 	for (int i = 0; i < input_topic_names.size(); i++) {
-		bounded_buffer< std::pair<true_input_type, bool>* >* buf = new bounded_buffer< std::pair<true_input_type, bool>* >(size_of_buffer);
+		bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >* buf = new bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >(size_of_buffer);
 		ring_buffers.push_back(buf);
 	}
 
@@ -114,13 +120,14 @@ int main(int argc, char* argv[]) {
 	vector<daily_data> act_data;
 
 	// Create manager thread
-	boost::thread manager_t{manager, std::ref(running), std::ref(csv_file), std::ref(csv_mutex), std::ref(act_data)};
+	boost::thread manager_t{manager, std::ref(m_stop), std::ref(stop_threads), std::ref(csv_file), std::ref(csv_mutex), std::ref(act_data)};
 
 	// Create threads
 	boost::thread_group thrs;
 	for(int i = 0; i < N; i++) {
 		boost::thread *t = new boost::thread(worker_thread, 
-											 std::ref(running), 
+											 std::ref(m_stop), 
+											 std::ref(stop_threads),
 											 std::ref(ring_buffers), 
 											 std::ref(producer), 
 											 output_topic_names, 
@@ -131,14 +138,15 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Create keepers of messages
-	std::vector< std::list< std::pair< std::pair<true_input_type, bool>, Message& > > > list_of_messages(input_topic_names.size());
+	std::vector< std::list< std::pair< std::pair<true_input_type, std::atomic<bool> & >, Message& > > > list_of_messages(input_topic_names.size());
 	std::vector< std::list< std::vector<Message> > > msgs(input_topic_names.size());
+	std::vector< std::list< std::vector< std::atomic<bool> > > > atomics_msgs(input_topic_names.size());
 	std::vector< std::list< int > > counts_of_unhandled_msgs(input_topic_names.size());
 
 	int index_of_topic(0);
 
 	// Now read lines and write them into kafka
-	while (running) {
+	while (!stop_main.load()) {
 		// Try to consume a message
 		if (ring_buffers[index_of_topic]->cur_count() < need_messages) {
 			// Get batch
@@ -151,28 +159,39 @@ int main(int argc, char* argv[]) {
 			} else {
 				// Loop-Handler getting batch
 				int new_size(msgs[index_of_topic].back().size());
+				INFO << "Get batch with " << new_size << " msgs";
+
+				atomics_msgs[index_of_topic].emplace_back(new_size);
+				for (int i_a = 0; i_a < new_size; i_a++) atomics_msgs[index_of_topic].back()[i_a].store(false);
 				counts_of_unhandled_msgs[index_of_topic].push_back(new_size);
+
 				for (int i = 0; i < new_size; i++) {
 					Message & cur_msg = msgs[index_of_topic].back()[i];
+					std::atomic<bool> & cur_atomic = atomics_msgs[index_of_topic].back()[i];
 					// Check message
 					if (!cur_msg || cur_msg.get_error()) {
-						counts_of_unhandled_msgs[index_of_topic].back()--;
+						//counts_of_unhandled_msgs[index_of_topic].back()--;
+						cur_atomic.store(true);
 						continue;
 					}
 					// De-serialization
-					true_input_type new_value = deserialization(cur_msg.get_payload());
+					true_input_type new_value;
+					new_value = deserialization(cur_msg.get_payload());
+
 					if (!validation(new_value)) {
-						counts_of_unhandled_msgs[index_of_topic].back()--;
+						//counts_of_unhandled_msgs[index_of_topic].back()--;
+						cur_atomic.store(true);
 						continue;
 					}
 					new_value.set_topic_to_output(output_topic_names[index_of_topic]);
 
 					// Put message into list of messages
-					list_of_messages[index_of_topic].push_back(std::pair< std::pair<true_input_type, bool>, Message& >(std::pair<true_input_type, bool>(new_value, false), cur_msg));
+					list_of_messages[index_of_topic].emplace_back(std::pair<true_input_type, std::atomic<bool> & >(new_value, cur_atomic), cur_msg);
+					std::pair<true_input_type, std::atomic<bool> & > * in_buf = &(list_of_messages[index_of_topic].back().first);
 					// Put message into ring buffer
-					ring_buffers[index_of_topic]->push_front(&(list_of_messages[index_of_topic].back().first));
+					ring_buffers[index_of_topic]->push_front(in_buf);
 
-					INFO << "New message from Kafka put into ring buffer";
+					INFO << "New message put into ring buffer";
 				}
 			}
 		}
@@ -181,17 +200,24 @@ int main(int argc, char* argv[]) {
 		for (int index_of_topic_to_check = 0; index_of_topic_to_check < input_topic_names.size(); index_of_topic_to_check++) {
 			Message *prev_handled = nullptr;
 			int count_to_remove(0);
-			for (const std::pair< std::pair<true_input_type, bool>, Message& > & check_msg : list_of_messages[index_of_topic_to_check]) {
-				if (check_msg.first.second) {
+			INFO << "Start check handled tasks";
+			for (const std::pair< std::pair<true_input_type, std::atomic<bool> & >, Message& > & check_msg : list_of_messages[index_of_topic_to_check]) {
+				if (check_msg.first.second.load() && counts_of_unhandled_msgs[index_of_topic_to_check].size() > 0) {
 					while (counts_of_unhandled_msgs[index_of_topic_to_check].front() == 0) {
+						INFO << "Delete fully-handled batch";
 						msgs[index_of_topic_to_check].pop_front();
+						atomics_msgs[index_of_topic_to_check].pop_front();
 						counts_of_unhandled_msgs[index_of_topic_to_check].pop_front();
+						INFO << "Success in delete fully-handled batch";
 					}
 					counts_of_unhandled_msgs[index_of_topic_to_check].front()--;
 					prev_handled = &(check_msg.second);
 					count_to_remove++;
-				} else if (count_to_remove > 0) {
-					consumers[index_of_topic_to_check]->commit(*prev_handled);
+				} else {
+					if (count_to_remove > 0) {
+						consumers[index_of_topic_to_check]->commit(*prev_handled);
+						INFO << "Commit message (all messages before this handled)";
+					}
 					break;
 				}
 			}
@@ -199,18 +225,23 @@ int main(int argc, char* argv[]) {
 
 			// Delete elements from list of messages
 			if (count_to_remove > 0) {
-				std::list< std::pair< std::pair<true_input_type, bool>, Message& > >::iterator i1=list_of_messages[index_of_topic_to_check].begin();
-				std::list< std::pair< std::pair<true_input_type, bool>, Message& > >::iterator i2=list_of_messages[index_of_topic_to_check].begin();
-		
+				std::list< std::pair< std::pair<true_input_type, std::atomic<bool> & >, Message& > >::iterator i1=list_of_messages[index_of_topic_to_check].begin();
+				std::list< std::pair< std::pair<true_input_type, std::atomic<bool> & >, Message& > >::iterator i2=list_of_messages[index_of_topic_to_check].begin();
+
 				std::advance(i2, count_to_remove);
+				INFO << "Remove " << count_to_remove << " committing messages";
 				list_of_messages[index_of_topic_to_check].erase(i1, i2);
 			}
 		}
 	}
+
+	//stop_threads.notify_all();
 	manager_t.join();
-	thrs.interrupt_all();
+	thrs.join_all();
 	for (int i = 0; i < input_topic_names.size(); i++) {
 		delete consumers[i];
 		delete ring_buffers[i];
 	}
+
+	return 0;
 }

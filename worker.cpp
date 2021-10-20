@@ -76,12 +76,12 @@ true_output_type & construct_output_from_solver(true_output_type & out_m, const 
 	out_m.set_currency(in_m.currency());
 	out_m.set_total_cost(out_s.totalCost);
 	out_m.set_obj(out_s.objectiveValue);
-	//out_m.set_commission();
+	// out_m.set_commission();
 	for (int i = 0; i < in_m.universe_size(); i++) {
 		(*(out_m.mutable_lots_number()))[in_m.universe()[i]] = out_s.numLots[i];
 		(*(out_m.mutable_weights()))[in_m.universe()[i]] = out_s.weights[i];
-		// (*(out_m.mutable_prices()))[in_m.universe()[i]] = out_s.prices[i]; ???
-		// (*(out_m.mutable_quantity()))[in_m.universe()[i]] = out_s.quantity[i]; ???
+		//(*(out_m.mutable_prices()))[in_m.universe()[i]] = out_s.prices[i]; ???
+		//(*(out_m.mutable_quantity()))[in_m.universe()[i]] = out_s.quantity[i]; ???
 	}
 	std::vector<output_proto::OutputData_Statuses> statuses {
 		output_proto::OutputData_Statuses_NOT_STARTED,

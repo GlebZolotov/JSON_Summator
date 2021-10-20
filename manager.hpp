@@ -15,8 +15,13 @@
 #include "dailydata.hpp"
 #include "csv_handler.hpp"
 #include <vector>
+#include <condition_variable>
 #include <string>
 
-void manager(bool & running, std::string & name_of_csv, boost::mutex & csv_lock, std::vector<daily_data> & actual_data);
+void manager(std::mutex & m_stop, 
+             std::condition_variable & stop_threads, 
+             std::string & name_of_csv, 
+             boost::mutex & csv_lock, 
+             std::vector<daily_data> & actual_data);
 
 #endif /* MANAGER_HPP_ */

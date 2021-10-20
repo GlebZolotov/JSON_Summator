@@ -36,7 +36,7 @@ MadSolution & TestSolver::Solve() {
     res.weights.resize(task.meanRate.rows());
     for (int i = 0; i < task.meanRate.rows(); i++) {
         res.numLots[i] = mersenne()%10000;
-        res.weights[i] = mersenne()%10000 / 100000.;
+        res.weights[i] = (double)(mersenne()%10000) / 100000.;
     }
     res.objectiveValue = mersenne()%10000 / 100000.;
     res.problemType = static_cast<ProblemType>(mersenne()%4);
