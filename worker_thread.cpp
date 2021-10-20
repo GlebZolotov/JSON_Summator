@@ -7,8 +7,7 @@
 
 #include "worker_thread.hpp"
 
-void worker_thread( std::mutex & m_stop,
-                    std::condition_variable & stop_threads, 
+void worker_thread( std::atomic<bool> & stop_threads, 
                     std::vector< bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >* > & ring_buffers, 
                     cppkafka::BufferedProducer<std::string> & producer, 
 					std::vector<std::string> output_topics_name,
@@ -24,7 +23,7 @@ void worker_thread( std::mutex & m_stop,
 	std::string cur_thr_name_csv(name_of_csv);
 	std::vector<daily_data> cur_actual_data;
 	
-	while (true) {
+	while (!stop_threads.load()) {
 		{
 			// Check if have new data from csv
 			boost::unique_lock<boost::mutex> locker(csv_lock);
@@ -62,9 +61,8 @@ void worker_thread( std::mutex & m_stop,
 				INFO << "Exception was caught";
 			}
 		}
-		//std::unique_lock<std::mutex> l(m_stop);
-        //if (stop_threads.wait_for(l, std::chrono::milliseconds(10)) == std::cv_status::no_timeout) break;
 	}
+	INFO << "Close thread";
 }
 
 

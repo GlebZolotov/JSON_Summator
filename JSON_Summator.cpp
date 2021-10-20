@@ -28,8 +28,7 @@ using namespace std::chrono_literals;
 namespace po = boost::program_options;
 
 std::atomic<int> stop_main = 0;
-std::condition_variable stop_threads;
-std::mutex m_stop;
+std::atomic<bool> stop_threads = false;
 
 void signalHandler(int signum) {
     stop_main.store(1);
@@ -83,7 +82,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Stop processing on SIGINT
-	//signal(SIGINT, signalHandler);
+	signal(SIGINT, signalHandler);
 
 	// Create consumers
 	vector<Consumer*> consumers;
@@ -120,16 +119,15 @@ int main(int argc, char* argv[]) {
 	vector<daily_data> act_data;
 
 	// Create manager thread
-	boost::thread manager_t{manager, std::ref(m_stop), std::ref(stop_threads), std::ref(csv_file), std::ref(csv_mutex), std::ref(act_data)};
+	boost::thread manager_t{manager, std::ref(stop_threads), std::ref(csv_file), std::ref(csv_mutex), std::ref(act_data)};
 
 	// Create threads
 	boost::thread_group thrs;
 	for(int i = 0; i < N; i++) {
-		boost::thread *t = new boost::thread(worker_thread, 
-											 std::ref(m_stop), 
+		boost::thread *t = new boost::thread(worker_thread,
 											 std::ref(stop_threads),
 											 std::ref(ring_buffers), 
-											 std::ref(producer), 
+											 std::ref(producer),  
 											 output_topic_names, 
 											 std::ref(csv_file), 
 											 std::ref(csv_mutex), 
@@ -235,13 +233,18 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	//stop_threads.notify_all();
+	stop_threads.store(true);
+	INFO << "Join manager";
 	manager_t.join();
+	INFO << "Join workers";
 	thrs.join_all();
+	INFO << "Clean memory";
 	for (int i = 0; i < input_topic_names.size(); i++) {
-		delete consumers[i];
+		INFO << "Delete consumer";
+		consumers[i]-> unsubscribe();
+		//delete consumers[i];
+		INFO << "Delete ring_buffer";
 		delete ring_buffers[i];
 	}
-
 	return 0;
 }

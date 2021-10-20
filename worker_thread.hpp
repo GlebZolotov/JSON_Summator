@@ -16,8 +16,7 @@
 #include <string>
 #include <cppkafka/utils/buffered_producer.h>
 
-void worker_thread( std::mutex & m_stop,
-                    std::condition_variable & stop_threads,
+void worker_thread( std::atomic<bool> & stop_threads,
                     std::vector< bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >* > & ring_buffers, 
                     cppkafka::BufferedProducer<std::string> & producer, 
                     std::vector<std::string> output_topics_name,

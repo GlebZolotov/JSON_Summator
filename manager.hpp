@@ -15,11 +15,10 @@
 #include "dailydata.hpp"
 #include "csv_handler.hpp"
 #include <vector>
-#include <condition_variable>
 #include <string>
+#include "logging.hpp"
 
-void manager(std::mutex & m_stop, 
-             std::condition_variable & stop_threads, 
+void manager(std::atomic<bool> & stop_threads, 
              std::string & name_of_csv, 
              boost::mutex & csv_lock, 
              std::vector<daily_data> & actual_data);
