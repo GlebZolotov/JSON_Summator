@@ -45,6 +45,10 @@ int main(int argc, char* argv[]) {
 	int need_messages;
 	string csv_file;
 
+	IP7_Client *l_pClient = NULL;
+	IP7_Trace *log_trace = init_logger(&l_pClient);
+	reg_current_thread(log_trace, "main");
+
     po::options_description options("Options");
     options.add_options()
         ("help,h",     			"produce this help message")
@@ -131,7 +135,8 @@ int main(int argc, char* argv[]) {
 											 output_topic_names, 
 											 std::ref(csv_file), 
 											 std::ref(csv_mutex), 
-											 std::ref(act_data));
+											 std::ref(act_data),
+											 std::string("worker") + std::to_string(i+1));
 		thrs.add_thread(t);
 	}
 
@@ -157,7 +162,7 @@ int main(int argc, char* argv[]) {
 			} else {
 				// Loop-Handler getting batch
 				int new_size(msgs[index_of_topic].back().size());
-				INFO << "Get batch with " << new_size << " msgs";
+				log_trace->P7_INFO(0, TM("Get batch with %d msgs"), new_size);
 
 				atomics_msgs[index_of_topic].emplace_back(new_size);
 				for (int i_a = 0; i_a < new_size; i_a++) atomics_msgs[index_of_topic].back()[i_a].store(false);
@@ -188,8 +193,8 @@ int main(int argc, char* argv[]) {
 					std::pair<true_input_type, std::atomic<bool> & > * in_buf = &(list_of_messages[index_of_topic].back().first);
 					// Put message into ring buffer
 					ring_buffers[index_of_topic]->push_front(in_buf);
-
-					INFO << "New message put into ring buffer";
+					
+					log_trace->P7_INFO(0, TM("New message put into ring buffer"));
 				}
 			}
 		}
@@ -198,15 +203,15 @@ int main(int argc, char* argv[]) {
 		for (int index_of_topic_to_check = 0; index_of_topic_to_check < input_topic_names.size(); index_of_topic_to_check++) {
 			Message *prev_handled = nullptr;
 			int count_to_remove(0);
-			INFO << "Start check handled tasks";
+			log_trace->P7_INFO(0, TM("Start check handled tasks"));
 			for (const std::pair< std::pair<true_input_type, std::atomic<bool> & >, Message& > & check_msg : list_of_messages[index_of_topic_to_check]) {
 				if (check_msg.first.second.load() && counts_of_unhandled_msgs[index_of_topic_to_check].size() > 0) {
 					while (counts_of_unhandled_msgs[index_of_topic_to_check].front() == 0) {
-						INFO << "Delete fully-handled batch";
+						log_trace->P7_INFO(0, TM("Delete fully-handled batch"));
 						msgs[index_of_topic_to_check].pop_front();
 						atomics_msgs[index_of_topic_to_check].pop_front();
 						counts_of_unhandled_msgs[index_of_topic_to_check].pop_front();
-						INFO << "Success in delete fully-handled batch";
+						log_trace->P7_INFO(0, TM("Success in delete fully-handled batch"));
 					}
 					counts_of_unhandled_msgs[index_of_topic_to_check].front()--;
 					prev_handled = &(check_msg.second);
@@ -214,7 +219,7 @@ int main(int argc, char* argv[]) {
 				} else {
 					if (count_to_remove > 0) {
 						consumers[index_of_topic_to_check]->commit(*prev_handled);
-						INFO << "Commit message (all messages before this handled)";
+						log_trace->P7_INFO(0, TM("Commit message (all messages before this handled)"));
 					}
 					break;
 				}
@@ -227,24 +232,27 @@ int main(int argc, char* argv[]) {
 				std::list< std::pair< std::pair<true_input_type, std::atomic<bool> & >, Message& > >::iterator i2=list_of_messages[index_of_topic_to_check].begin();
 
 				std::advance(i2, count_to_remove);
-				INFO << "Remove " << count_to_remove << " committing messages";
+				log_trace->P7_INFO(0, TM("Remove %d committing messages"), count_to_remove);
 				list_of_messages[index_of_topic_to_check].erase(i1, i2);
 			}
 		}
 	}
 
 	stop_threads.store(true);
-	INFO << "Join manager";
+	log_trace->P7_INFO(0, TM("Join manager"));
 	manager_t.join();
-	INFO << "Join workers";
+	log_trace->P7_INFO(0, TM("Join workers"));
 	thrs.join_all();
-	INFO << "Clean memory";
+	log_trace->P7_INFO(0, TM("Clean memory"));
 	for (int i = 0; i < input_topic_names.size(); i++) {
-		INFO << "Delete consumer";
+		log_trace->P7_INFO(0, TM("Delete consumer"));
 		consumers[i]-> unsubscribe();
 		//delete consumers[i];
-		INFO << "Delete ring_buffer";
+		log_trace->P7_INFO(0, TM("Delete ring_buffer"));
 		delete ring_buffers[i];
 	}
+	google::protobuf::ShutdownProtobufLibrary();
+	del_current_thread(log_trace);
+	close_logger(l_pClient);
 	return 0;
 }

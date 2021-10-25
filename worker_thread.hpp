@@ -22,7 +22,8 @@ void worker_thread( std::atomic<bool> & stop_threads,
                     std::vector<std::string> output_topics_name,
                     std::string & name_of_csv, 
                     boost::mutex & csv_lock,
-                    std::vector<daily_data> & manager_actual_data
+                    std::vector<daily_data> & manager_actual_data,
+                    std::string name
                     );
 
 #endif /* WORKER_THREAD_HPP_ */

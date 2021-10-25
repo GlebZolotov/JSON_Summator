@@ -7,46 +7,44 @@
 
 #include "logging.hpp"
 
-namespace attrs   = boost::log::attributes;
-namespace expr    = boost::log::expressions;
-namespace logging = boost::log;
+IP7_Trace * init_logger(IP7_Client **l_pClient) {
+    IP7_Trace         *l_pTrace     = NULL;
 
-//Defines a global logger initialization routine
-BOOST_LOG_GLOBAL_LOGGER_INIT(my_logger, logger_t)
-{
-    logger_t lg;
+    P7_Set_Crash_Handler();
+    //create P7 client object
+    *l_pClient = P7_Create_Client(TM(PARAMS_OF_CLIENT));
+    if (NULL == *l_pClient) return NULL;
 
-    logging::add_common_attributes();
+    //create P7 trace object 1
+    l_pTrace = P7_Create_Trace(*l_pClient, TM(NAME_OF_TRACE));
+    if (NULL == l_pTrace) {
+        (*l_pClient)->Release();
+        l_pClient = NULL;
+        return NULL;
+    }
+    l_pTrace->Share(TM(NAME_OF_TRACE));
 
-    logging::add_file_log(
-            boost::log::keywords::file_name = SYS_LOGFILE,
-            boost::log::keywords::format = (
-                    expr::stream << expr::format_date_time<     boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
-                    << " [" << expr::attr<     boost::log::trivial::severity_level >("Severity") << "]: "
-                    << expr::attr<boost::log::attributes::current_thread_id::value_type >("ThreadID") << " "
-                    << expr::smessage
-            )
-    );
-
-    logging::add_console_log(
-            std::cout,
-            boost::log::keywords::format = (
-                    expr::stream << expr::format_date_time<     boost::posix_time::ptime >("TimeStamp", "%Y-%m-%d %H:%M:%S.%f")
-                    << " [" << expr::attr<     boost::log::trivial::severity_level >("Severity") << "]: "
-                    << expr::attr<boost::log::attributes::current_thread_id::value_type >("ThreadID") << " "
-                    << expr::smessage
-            )
-    );
-
-    logging::core::get()->set_filter
-    (
-        logging::trivial::severity >= logging::trivial::info
-    );
-
-    return lg;
+    return l_pTrace;
 }
 
+IP7_Trace * connect_logger() {
+    return P7_Get_Shared_Trace(TM(NAME_OF_TRACE));
+}
 
+void reg_current_thread(IP7_Trace * tr, const char *name_of_thr) {
+    tr->Register_Thread(TM(name_of_thr), 0);    
+}
+
+void del_current_thread(IP7_Trace * tr) {
+    tr->Unregister_Thread(0);
+    tr->Release();
+    tr = NULL;
+}
+
+void close_logger(IP7_Client *l_pClient) {
+    l_pClient->Release();
+    l_pClient = NULL;
+}
 
 
 

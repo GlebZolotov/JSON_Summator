@@ -17,6 +17,7 @@
 #include "input_data.pb.h"
 #include "output_data.pb.h"
 #include "library/test_solver.hpp"
+#include "logging.hpp"
 
 
 typedef input_proto::InputData true_input_type;
