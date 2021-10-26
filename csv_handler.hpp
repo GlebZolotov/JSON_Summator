@@ -11,14 +11,12 @@
 #include <vector>
 #include <string>
 #include <filesystem>
-#include "dailydata.hpp"
 #include <iostream>
 #include <fstream>
 
 namespace fs = std::filesystem;
 
-bool is_new_file(std::string &name_of_file);
-void parse_file(std::string &name_of_file, std::vector<daily_data> & res);
+bool is_new_file(std::string &name_of_path);
 
 
 #endif /* CSV_HANDLER_HPP_ */

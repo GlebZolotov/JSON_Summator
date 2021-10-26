@@ -11,10 +11,14 @@
 #include "worker.hpp"
 #include "logging.hpp"
 #include "boundedbuffer.hpp"
-#include "dailydata.hpp"
 #include <vector>
 #include <string>
 #include <cppkafka/utils/buffered_producer.h>
+#include "rapidcsv.h"
+#include "MADmax_solver.hpp"
+#include "mad_min/solver.hpp"
+#include "mad_max_lp_solver.hpp"
+#include "mad_min_lp_solver.hpp"
 
 void worker_thread( std::atomic<bool> & stop_threads,
                     std::vector< bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >* > & ring_buffers, 
@@ -22,7 +26,7 @@ void worker_thread( std::atomic<bool> & stop_threads,
                     std::vector<std::string> output_topics_name,
                     std::string & name_of_csv, 
                     boost::mutex & csv_lock,
-                    std::vector<daily_data> & manager_actual_data,
+                    std::vector<rapidcsv::Document> & manager_actual_data,
                     std::string name
                     );
 

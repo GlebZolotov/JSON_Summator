@@ -1,0 +1,29 @@
+{
+  "rqId":"test1",
+  "model": "mad",
+  "market": "USA",
+  "currency":"USD",
+  "universe":[
+    "AFKS",
+    "ARSA",
+    "BANEP",
+    "BISVP",
+    "BRZL"
+],
+  "T_0": "2015-06-01",
+  "T_1": "2021-04-16",
+
+  "parameters":{
+    "max_risk":0.005,
+    "p_max":0.15,
+    "min_return" : 0.0016,
+    "t":1000,
+    "capital": 100000,
+    "wmin" : 0.9
+   },
+
+  "time_limit": 1800,
+  "iteration_limit": 100,
+  "node_limit": 200,
+  "user_obj_limit": 200
+}

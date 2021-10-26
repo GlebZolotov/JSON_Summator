@@ -2,13 +2,16 @@ syntax = "proto3";
 
 package input_proto;
 
-message Parameters {
-    double max_risk = 1;
-    double min_return = 2;
-    double p_max = 3;
-    uint32 t = 4;
-    double capital = 5;
-    double wmin = 6;
+message Params {
+    string T_0 = 1;
+    string T_1 = 2;
+    double portfolio_risk_max = 3;
+    double portfolio_return_min = 4;
+    double portfolio_weight_max = 5;
+    double portfolio_weight_min = 6;
+    uint32 t = 7;
+    double capital = 8;
+    double weight_min = 9;
 }
 
 message InputData {
@@ -17,12 +20,10 @@ message InputData {
     string market = 3;
     string currency = 4;
     repeated string universe = 5;
-    string T_0 = 6;
-    string T_1 = 7;
-    Parameters p = 8;
-    int32 time_limit = 9;
-    int32 iteration_limit = 10;
-    int32 node_limit = 11;
-    double user_obj_limit = 12;
-    string topic_to_output = 13;
+    Params parameters = 6;
+    int32 time_limit = 7;
+    int32 iteration_limit = 8;
+    int32 node_limit = 9;
+    double user_obj_limit = 10;
+    string topic_to_output = 11;
 }

@@ -11,6 +11,7 @@
 #include <cppkafka/configuration.h>
 #include <boost/thread.hpp>
 #include <chrono>
+#include "rapidcsv.h"
 
 
 using std::string;
@@ -31,6 +32,7 @@ std::atomic<int> stop_main = 0;
 std::atomic<bool> stop_threads = false;
 
 void signalHandler(int signum) {
+	(void)signum;
     stop_main.store(1);
 }
 
@@ -69,7 +71,7 @@ int main(int argc, char* argv[]) {
 		("limit_count_before,l", 	po::value<int>(&need_messages)->required(),
 							  	"count of message which need for reading batch")
 		("path_csv,c", 	        po::value<string>(&csv_file)->required(),
-							  	"name with path of csv file")
+							  	"path to folder with csv files")
         ;
 
     po::variables_map vm;
@@ -90,7 +92,7 @@ int main(int argc, char* argv[]) {
 
 	// Create consumers
 	vector<Consumer*> consumers;
-	for (int i = 0; i < input_topic_names.size(); i++) {
+	for (unsigned int i = 0; i < input_topic_names.size(); i++) {
 		// Construct the configuration
 		Configuration config_cons = {
 			{ "metadata.broker.list", brokers },
@@ -113,14 +115,14 @@ int main(int argc, char* argv[]) {
 
 	// Create ring buffer
 	std::vector< bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >* > ring_buffers;
-	for (int i = 0; i < input_topic_names.size(); i++) {
+	for (unsigned int i = 0; i < input_topic_names.size(); i++) {
 		bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >* buf = new bounded_buffer< std::pair<true_input_type, std::atomic<bool> & >* >(size_of_buffer);
 		ring_buffers.push_back(buf);
 	}
 
 	// Create mutex and vector for csv_file
 	boost::mutex csv_mutex;
-	vector<daily_data> act_data;
+	vector<rapidcsv::Document> act_data(CSV_COUNT_FILES);
 
 	// Create manager thread
 	boost::thread manager_t{manager, std::ref(stop_threads), std::ref(csv_file), std::ref(csv_mutex), std::ref(act_data)};
@@ -146,7 +148,7 @@ int main(int argc, char* argv[]) {
 	std::vector< std::list< std::vector< std::atomic<bool> > > > atomics_msgs(input_topic_names.size());
 	std::vector< std::list< int > > counts_of_unhandled_msgs(input_topic_names.size());
 
-	int index_of_topic(0);
+	unsigned int index_of_topic(0);
 
 	// Now read lines and write them into kafka
 	while (!stop_main.load()) {
@@ -174,6 +176,7 @@ int main(int argc, char* argv[]) {
 					// Check message
 					if (!cur_msg || cur_msg.get_error()) {
 						//counts_of_unhandled_msgs[index_of_topic].back()--;
+						log_trace->P7_INFO(0, TM("Broken message"));
 						cur_atomic.store(true);
 						continue;
 					}
@@ -183,6 +186,7 @@ int main(int argc, char* argv[]) {
 
 					if (!validation(new_value)) {
 						//counts_of_unhandled_msgs[index_of_topic].back()--;
+						log_trace->P7_INFO(0, TM("Invalid message"));
 						cur_atomic.store(true);
 						continue;
 					}
@@ -200,9 +204,9 @@ int main(int argc, char* argv[]) {
 		}
 
 		// Check handled and sent messages
-		for (int index_of_topic_to_check = 0; index_of_topic_to_check < input_topic_names.size(); index_of_topic_to_check++) {
+		for (unsigned int index_of_topic_to_check = 0; index_of_topic_to_check < input_topic_names.size(); index_of_topic_to_check++) {
 			Message *prev_handled = nullptr;
-			int count_to_remove(0);
+			unsigned int count_to_remove(0);
 			log_trace->P7_INFO(0, TM("Start check handled tasks"));
 			for (const std::pair< std::pair<true_input_type, std::atomic<bool> & >, Message& > & check_msg : list_of_messages[index_of_topic_to_check]) {
 				if (check_msg.first.second.load() && counts_of_unhandled_msgs[index_of_topic_to_check].size() > 0) {
@@ -244,7 +248,7 @@ int main(int argc, char* argv[]) {
 	log_trace->P7_INFO(0, TM("Join workers"));
 	thrs.join_all();
 	log_trace->P7_INFO(0, TM("Clean memory"));
-	for (int i = 0; i < input_topic_names.size(); i++) {
+	for (unsigned int i = 0; i < input_topic_names.size(); i++) {
 		log_trace->P7_INFO(0, TM("Delete consumer"));
 		consumers[i]-> unsubscribe();
 		//delete consumers[i];

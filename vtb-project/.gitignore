@@ -1,0 +1,52 @@
+bin/
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+.vscode/
+.idea/
+.kdev4/
+*.kdev4
+build/
+
+# misc
+matlab/MADmin/*.h5
+matlab/MADmin/*.m~
+matlab/MADmin/*.asv
+
+# python
+__pycache__/
+ *.pyc
+python/*.mat
+python/*.mps
+
+data/ouput_results.json
