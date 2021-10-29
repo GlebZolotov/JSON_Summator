@@ -12,7 +12,7 @@
 #include <boost/thread.hpp>
 #include <chrono>
 #include "rapidcsv.h"
-
+#include "loc_utils.hpp"
 
 using std::string;
 using std::vector;
@@ -90,6 +90,16 @@ int main(int argc, char* argv[]) {
 	// Stop processing on SIGINT
 	signal(SIGINT, signalHandler);
 
+	fs::remove_all("input_jsons");
+	fs::remove_all("output_jsons");
+	fs::remove_all("input_statements");
+	fs::remove_all("output_results");
+
+	fs::create_directories("input_jsons");
+	fs::create_directories("output_jsons");
+	fs::create_directories("input_statements");
+	fs::create_directories("output_results");
+
 	// Create consumers
 	vector<Consumer*> consumers;
 	for (unsigned int i = 0; i < input_topic_names.size(); i++) {
@@ -121,8 +131,8 @@ int main(int argc, char* argv[]) {
 	}
 
 	// Create mutex and vector for csv_file
-	boost::mutex csv_mutex;
-	vector<rapidcsv::Document> act_data(CSV_COUNT_FILES);
+	std::mutex csv_mutex;
+	vector<rapidcsv::Document> act_data(CsvCountFiles);
 
 	// Create manager thread
 	boost::thread manager_t{manager, std::ref(stop_threads), std::ref(csv_file), std::ref(csv_mutex), std::ref(act_data)};
@@ -175,17 +185,18 @@ int main(int argc, char* argv[]) {
 					std::atomic<bool> & cur_atomic = atomics_msgs[index_of_topic].back()[i];
 					// Check message
 					if (!cur_msg || cur_msg.get_error()) {
-						//counts_of_unhandled_msgs[index_of_topic].back()--;
 						log_trace->P7_INFO(0, TM("Broken message"));
 						cur_atomic.store(true);
 						continue;
 					}
 					// De-serialization
 					true_input_type new_value;
-					new_value = deserialization(cur_msg.get_payload());
-
+					const std::string & new_str(cur_msg.get_payload());
+		
+					new_value = deserialization(new_str);
+					write_file(std::string("input_jsons/") + new_value.rqid() + std::string(".json"), new_str);
+					
 					if (!validation(new_value)) {
-						//counts_of_unhandled_msgs[index_of_topic].back()--;
 						log_trace->P7_INFO(0, TM("Invalid message"));
 						cur_atomic.store(true);
 						continue;

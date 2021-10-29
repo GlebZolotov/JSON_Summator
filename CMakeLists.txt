@@ -7,25 +7,43 @@ SET(CMAKE_CXX_FLAGS "-Wall -g")
 SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=corei7-avx -funroll-loops") #-finline-functions
 SET(CMAKE_CXX_FLAGS_DEBUG  "-O0 -g -Wall -Wextra -Wpedantic")
 
-set(SOURCE_EXE JSON_Summator.cpp logging.cpp manager.cpp worker_thread.cpp worker.cpp csv_handler.cpp)
+set(SOURCE_EXE JSON_Summator.cpp)
+
+include(FetchContent)
+set(FETCHCONTENT_QUIET FALSE)
+
+#download Eigen library from git
+FetchContent_Declare(
+  Eigen
+  GIT_REPOSITORY https://gitlab.com/cantonios/eigen
+  GIT_TAG 3.4.0
+  GIT_SHALLOW TRUE
+  GIT_PROGRESS TRUE)
+set(EIGEN_BUILD_DOC OFF)
+# note: To disable eigen tests,
+# you should put this code in a add_subdirectory to avoid to change
+# BUILD_TESTING for your own project too since variables are directory
+# scoped
+set(BUILD_TESTING OFF)
+set(EIGEN_BUILD_PKGCONFIG OFF)
+FetchContent_MakeAvailable(Eigen)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_library(P7LOGGER p7)
-find_library(RT_FOR_P7 rt)
 find_package(Threads REQUIRED)
 find_package(CppKafka REQUIRED)
-find_package(Protobuf REQUIRED)
-find_package(Boost COMPONENTS program_options log_setup log REQUIRED)
+find_package(Boost COMPONENTS program_options REQUIRED)
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
-INCLUDE_DIRECTORIES(${Protobuf_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/P7Client/Headers)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/vtb-project/include)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/vtb-project/src/milp)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/vtb-project/src/LP)
-add_subdirectory(vtb-project)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/libraryMIPT)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/libraryMIPT/milp)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/libraryMIPT/LP)
+add_subdirectory(src/logging)
+add_subdirectory(src/libraryMIPT)
+add_subdirectory(src/worker)
+add_subdirectory(src/manager)
+add_subdirectory(src/worker_thread)
+add_subdirectory(src/utils)
+add_subdirectory(include)
 
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS input_data.proto output_data.proto)
-
-add_executable(main ${SOURCE_EXE} ${PROTO_SRCS} ${PROTO_HDRS})	# Создает исполняемый файл с именем main
-target_link_libraries(main PRIVATE Threads::Threads CppKafka::cppkafka ${Boost_LIBRARIES} boost_thread ${Protobuf_LIBRARIES} ${P7LOGGER} ${RT_FOR_P7} Eigen3::Eigen mad_optimizer_lib)
+add_executable(main ${SOURCE_EXE})	# Создает исполняемый файл с именем main
+target_link_libraries(main PRIVATE Threads::Threads CppKafka::cppkafka ${Boost_LIBRARIES} boost_thread logging_lib manager_lib worker_thread_lib include_lib utils_lib)
